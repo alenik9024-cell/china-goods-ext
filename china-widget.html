@@ -59,31 +59,42 @@
 
     window.addEventListener('message', function(ev){
       // TODO: после подтверждения домена CRM проверять ev.origin.
-      if(!ev.data) return;
+      var d = ev.data;
+      if(!d) return;
+      // CRM может слать событие по-разному: строкой, {type:...} или вложенным {data:{...}}.
+      if(typeof d === 'string'){ try{ d = JSON.parse(d); }catch(e){ d = {type:d}; } }
+      if(d && d.data && typeof d.data === 'object' && !d.type) d = d.data;
+      var type = d && (d.type || d.event || d.name);
+      if(!type) return;
+      // диагностика: показать все события, связанные с нашим префиксом
+      if(String(type).indexOf('china-goods') === 0 || String(type).indexOf('click') !== -1){
+        setStatus('Событие от CRM: ' + String(type).slice(0, 80));
+      }
 
       // клик по кнопке сделки
-      if(ev.data.type === 'china-goods:open'){
+      if(type === 'china-goods:open'){
         var dealId='', clientName='';
-        Promise.resolve(w.getDeal()).then(function(d){
-          var deal=(d&&d.result)?d.result:d;
+        setStatus('Открываю подбор товаров…');
+        Promise.resolve(w.getDeal()).then(function(dealRes){
+          var deal=(dealRes&&dealRes.result)?dealRes.result:dealRes;
           if(deal) dealId = deal.id || deal.ID || '';
           // input_id 1001 (имя) — из рабочего примера КП; в документации не подтверждено
           return w.getClientValue({input_id:1001, type:'service'});
         }).then(function(v){
           clientName = (v && v.result!==undefined) ? v.result : (v && v.value) || '';
           openApp(dealId, clientName);
-        }).catch(function(){ openApp(dealId, clientName); });
+        }).catch(function(e){ setStatus('getDeal/getClientValue не сработали: '+e+' — открываю без контекста', 'err'); openApp(dealId, clientName); });
       }
 
       // возврат результата из расширения: {type:'china-goods:result', deal_id, summary, fileName, fileBase64}
-      if(ev.data.type === 'china-goods:result'){
-        var summary = String(ev.data.summary||'');
+      if(type === 'china-goods:result'){
+        var summary = String(d.summary||'');
         if(!RESULT_FIELD_ID){ setStatus('Результат получен, но RESULT_FIELD_ID не задан: '+summary.slice(0,120), 'err'); return; }
         // changeDealValue пишет значение поля; для поля типа «файл» передаём текст КП —
         // принятие файла через changeDealValue в документации не описано, проверить в CRM.
-        var value = ev.data.fileBase64 ? String(ev.data.fileBase64) : summary;
+        var value = summary; // текст итога (fileBase64 в файловое поле через SDK не передаётся)
         Promise.resolve(w.changeDealValue({input_id:RESULT_FIELD_ID, value:value}))
-          .then(function(){ setStatus('Итог записан в сделку', 'ok'); })
+          .then(function(){ setStatus('Итог записан в сделку: '+summary, 'ok'); })
           .catch(function(e){ setStatus('Не удалось записать в поле сделки: '+e, 'err'); });
       }
     }, false);
