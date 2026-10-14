@@ -2,9 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Товары из Китая — виджет EnvyCRM</title>
+<title>Подбор товаров — виджет EnvyCRM</title>
 <!-- Виджет первого уровня: кнопка в карточке сделки, открытие приложения,
-     приём результата расширения и запись его в поле сделки (возврат в CRM). -->
+     приём результата расширения и запись его в поле сделки (возврат в CRM).
+     Схема повторяет рабочую связку kp-widget: окно открывается СРАЗУ (без ожидания
+     getDeal), контекст сделки догружается фоном через localStorage. -->
 <script src="https://cdn.saas-support.com/crm_assets/build/widget/js/envycrmwidget.min.js"></script>
 <style>body{font:13px/1.4 sans-serif;padding:12px;color:#333}.err{color:#c00}.ok{color:#1a6b1a}</style>
 </head>
@@ -12,93 +14,142 @@
 <div id="status">Инициализация…</div>
 <script>
 (function(){
+  'use strict';
+
+  var VERSION = 'v3';
   var APP = 'https://alenik9024-cell.github.io/china-goods-ext/china-app.html';
+  var STORAGE_KEY = 'china_goods_deal_context';
 
   // Поле «Подбор товаров (итог)»: input_id=1113458 (подтверждено в Network: update_field_value,
-  // deal 116654102). Поле файловое: CRM прикрепляет файлы через /api/v2/common/file + files[]:(binary),
+  // deal 116654102). Поле файловое: файлы CRM прикрепляет через /api/v2/common/file,
   // поэтому changeDealValue запишет туда только текст итога, не файл.
   var RESULT_FIELD_ID = 1113458;
 
-  function cleanName(s){ if(!s) return ''; return String(s).split('::')[0].replace(/\*/g,'').trim(); }
-  function setStatus(t, cls){ var el=document.getElementById('status'); el.textContent=t; el.className=cls||''; }
+  var w = window.EnvyCrmWidget;
+  function log(m,d){ console.log('[ChinaGoods '+VERSION+'] '+m, d||''); }
+  function setStatus(t, cls){ var el=document.getElementById('status'); el.textContent=t; el.className=cls||''; log(t); }
 
-  function openApp(dealId, clientName){
-    var url = APP + '?deal=' + encodeURIComponent(dealId||'') +
-              '&name=' + encodeURIComponent(cleanName(clientName||''));
-    var w = window.EnvyCrmWidget;
+  if(!w){ setStatus('EnvyCrmWidget не загрузилась', 'err'); return; }
+
+  function text(v){
+    if(v===null||v===undefined) return '';
+    if(typeof v==='string'||typeof v==='number') return String(v).trim();
+    if(typeof v==='object'){
+      if(v.value!==undefined&&v.value!==null) return text(v.value);
+      if(v.client_name!==undefined) return text(v.client_name);
+      if(v.phone!==undefined) return text(v.phone);
+      if(v.name!==undefined) return text(v.name);
+      if(v.result!==undefined) return text(v.result);
+    }
+    return '';
+  }
+  function cleanName(s){
+    s=String(s||'');
+    var i=s.indexOf('::'); if(i>=0) s=s.slice(0,i);
+    return s.replace(/\*/g,'').trim();
+  }
+  function getDealObject(deal){ return deal&&deal.result ? deal.result : (deal||{}); }
+  function getDealId(deal){
+    var d=getDealObject(deal);
+    return String(d.id||d.deal_id||(deal&&deal.id)||'');
+  }
+  function getNameFromDeal(deal){
+    var d=getDealObject(deal);
+    var name=text(d.client_name||d.clientName||d.customer_name||d.name_client);
+    if(name) return name;
+    if(d.client&&typeof d.client==='object')
+      return text(d.client.client_name||d.client.name||d.client.name_client);
+    return '';
+  }
+  function getClientValue(inputId){
+    if(!w.getClientValue) return Promise.resolve('');
+    return w.getClientValue({input_id:inputId, type:'service'})
+      .then(function(r){ return text(r); })
+      .catch(function(){ return ''; });
+  }
+
+  function saveContext(ctx){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(ctx)); log('контекст сохранён', ctx); }
+    catch(e){ log('ошибка сохранения контекста', e); }
+  }
+
+  function openApp(){
+    var token='cg_'+Date.now();
+
+    // Пустой контекст сразу — окно открывается без ожидания API.
+    saveContext({token:token, dealId:'', clientName:'', time:Date.now()});
+
+    var url=APP+'?embed=1&context_token='+encodeURIComponent(token);
+    var content='<iframe src="'+url+'" style="width:100%;height:calc(100vh - 70px);min-height:600px;border:0" allowfullscreen></iframe>';
+
+    log('открываю приложение');
+    setStatus('Открываю подбор товаров…');
     try{
-      var res = w.openPage({content:'<iframe src="'+url+'" style="width:100%;height:100vh;border:0"></iframe>'});
-      if(res && typeof res.then==='function') res.catch(function(){ window.open(url,'_blank'); });
-    }catch(e){ window.open(url,'_blank'); }
+      if(w.openPage){
+        var page=w.openPage({content:content});
+        if(page&&typeof page.catch==='function'){
+          page.catch(function(err){
+            log('openPage не сработал', err);
+            if(w.openModal) w.openModal({title:'Подбор товаров', content:content, width:1150});
+          });
+        }
+      } else if(w.openModal){
+        w.openModal({title:'Подбор товаров', content:content, width:1150});
+      } else {
+        window.open(url,'_blank');
+      }
+    }catch(err){
+      log('ошибка открытия', err);
+      window.open(url,'_blank');
+    }
+
+    // Контекст сделки — фоном. input_id 1001 (имя) — из рабочего примера КП, не документирован.
+    w.getDeal().then(function(deal){
+      var dealId=getDealId(deal);
+      var known=getNameFromDeal(deal);
+      var namePromise = known ? Promise.resolve(known) : getClientValue(1001);
+      return namePromise.then(function(clientName){
+        saveContext({token:token, dealId:dealId, clientName:cleanName(clientName), time:Date.now()});
+      });
+    }).catch(function(e){ log('не удалось получить данные сделки', e); });
   }
 
-  function ready(fn){
-    var n=0;
-    (function poll(){
-      if(window.EnvyCrmWidget) return fn(window.EnvyCrmWidget);
-      if(++n>50) return setStatus('SDK EnvyCrmWidget не загрузился', 'err');
-      setTimeout(poll, 200);
-    })();
-  }
+  window.addEventListener('message', function(event){
+    var d=event.data, type=d&&d.type;
+    if(!type) return;
 
-  ready(function(w){
-    setStatus('Готово. Кнопка «Подбор товаров» в карточке сделки.', 'ok');
+    // клик по кнопке сделки
+    if(type==='china-goods:open'){
+      log('нажата кнопка «Подбор товаров»');
+      openApp();
+      return;
+    }
 
+    // возврат результата из расширения: {type:'china-goods:result', deal_id, summary, fileName, fileBase64}
+    if(type==='china-goods:result'){
+      var summary=String(d.summary||'');
+      if(!RESULT_FIELD_ID){ setStatus('Результат получен, но RESULT_FIELD_ID не задан', 'err'); return; }
+      Promise.resolve(w.changeDealValue({input_id:RESULT_FIELD_ID, value:summary}))
+        .then(function(){ setStatus('Итог записан в сделку: '+summary.slice(0,120), 'ok'); })
+        .catch(function(e){ setStatus('Не удалось записать в поле сделки: '+e, 'err'); });
+    }
+  }, false);
+
+  try{
     w.init({
-      'deal-btn': function(params){ // схема params не документирована — не используем
+      'deal-btn': function(){
         return [{
-          title: 'Подбор товаров',
-          styles: { color:'#fff', 'background-color':'#2F6BFF' },
-          icon: 'md-content-paste',
-          clickEventName: 'china-goods:open',
-          position: ['first'],
-          name: 'china-goods-deal-button'
+          title:'Подбор товаров',
+          styles:{color:'#fff','background-color':'#2F6BFF'},
+          icon:'md-content-paste',
+          clickEventName:'china-goods:open',
+          position:['first'],
+          name:'china-goods-btn-1'
         }];
       }
     });
-
-    window.addEventListener('message', function(ev){
-      // TODO: после подтверждения домена CRM проверять ev.origin.
-      var d = ev.data;
-      if(!d) return;
-      // CRM может слать событие по-разному: строкой, {type:...} или вложенным {data:{...}}.
-      if(typeof d === 'string'){ try{ d = JSON.parse(d); }catch(e){ d = {type:d}; } }
-      if(d && d.data && typeof d.data === 'object' && !d.type) d = d.data;
-      var type = d && (d.type || d.event || d.name);
-      if(!type) return;
-      // диагностика: показать все события, связанные с нашим префиксом
-      if(String(type).indexOf('china-goods') === 0 || String(type).indexOf('click') !== -1){
-        setStatus('Событие от CRM: ' + String(type).slice(0, 80));
-      }
-
-      // клик по кнопке сделки
-      if(type === 'china-goods:open'){
-        var dealId='', clientName='';
-        setStatus('Открываю подбор товаров…');
-        Promise.resolve(w.getDeal()).then(function(dealRes){
-          var deal=(dealRes&&dealRes.result)?dealRes.result:dealRes;
-          if(deal) dealId = deal.id || deal.ID || '';
-          // input_id 1001 (имя) — из рабочего примера КП; в документации не подтверждено
-          return w.getClientValue({input_id:1001, type:'service'});
-        }).then(function(v){
-          clientName = (v && v.result!==undefined) ? v.result : (v && v.value) || '';
-          openApp(dealId, clientName);
-        }).catch(function(e){ setStatus('getDeal/getClientValue не сработали: '+e+' — открываю без контекста', 'err'); openApp(dealId, clientName); });
-      }
-
-      // возврат результата из расширения: {type:'china-goods:result', deal_id, summary, fileName, fileBase64}
-      if(type === 'china-goods:result'){
-        var summary = String(d.summary||'');
-        if(!RESULT_FIELD_ID){ setStatus('Результат получен, но RESULT_FIELD_ID не задан: '+summary.slice(0,120), 'err'); return; }
-        // changeDealValue пишет значение поля; для поля типа «файл» передаём текст КП —
-        // принятие файла через changeDealValue в документации не описано, проверить в CRM.
-        var value = summary; // текст итога (fileBase64 в файловое поле через SDK не передаётся)
-        Promise.resolve(w.changeDealValue({input_id:RESULT_FIELD_ID, value:value}))
-          .then(function(){ setStatus('Итог записан в сделку: '+summary, 'ok'); })
-          .catch(function(e){ setStatus('Не удалось записать в поле сделки: '+e, 'err'); });
-      }
-    }, false);
-  });
+    setStatus('Готово. Кнопка «Подбор товаров» в карточке сделки.', 'ok');
+  }catch(e){ setStatus('ошибка регистрации кнопки: '+e, 'err'); }
 })();
 </script>
 </body>

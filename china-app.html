@@ -211,9 +211,43 @@ const DEFAULT_COMMISSION_PCT = 10;
 const qs = new URLSearchParams(location.search);
 const CTX = { deal: qs.get('deal') || '', name: cleanName(qs.get('name') || '') };
 function cleanName(s){ if(!s) return ''; return String(s).split('::')[0].replace(/\*/g,'').trim(); }
-document.getElementById('ctxLine').textContent =
-  CTX.deal ? `Сделка #${CTX.deal}${CTX.name ? ' · ' + CTX.name : ''}` : 'Без контекста сделки (открыто напрямую)';
-document.getElementById('selClient').textContent = CTX.name || '(клиент не определён)';
+
+/* Контекст из виджета: виджет сохраняет {token, dealId, clientName} в localStorage
+   (схема рабочей связки kp). Читаем по context_token из URL; контекст может прийти
+   позже — опрашиваем несколько секунд. */
+const CTX_TOKEN = qs.get('context_token') || '';
+function readWidgetContext(){
+  if(!CTX_TOKEN) return null;
+  try{
+    const raw = localStorage.getItem('china_goods_deal_context');
+    if(!raw) return null;
+    const c = JSON.parse(raw);
+    if(c && c.token === CTX_TOKEN) return c;
+  }catch(e){}
+  return null;
+}
+function applyWidgetContext(c){
+  if(!c) return false;
+  const deal = String(c.dealId||''), name = cleanName(c.clientName||'');
+  if(!deal && !name) return false;
+  if(deal) CTX.deal = deal;
+  if(name) CTX.name = name;
+  renderCtxLine();
+  return true;
+}
+function renderCtxLine(){
+  document.getElementById('ctxLine').textContent =
+    CTX.deal ? `Сделка #${CTX.deal}${CTX.name ? ' · ' + CTX.name : ''}` : 'Без контекста сделки (открыто напрямую)';
+  document.getElementById('selClient').textContent = CTX.name || '(клиент не определён)';
+}
+renderCtxLine();
+if(CTX_TOKEN){
+  applyWidgetContext(readWidgetContext());
+  let tries = 0;
+  const t = setInterval(()=>{
+    if(applyWidgetContext(readWidgetContext()) || ++tries > 25) clearInterval(t);
+  }, 400);
+}
 
 /* ================== API ================== */
 async function api(action, sheet, extra){
