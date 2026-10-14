@@ -190,8 +190,9 @@ h3{margin:14px 0 6px}
 <section id="tab-kp">
   <div class="row">
     <button class="btn" id="kpText">Сформировать КП</button>
-    <button class="ghost" id="kpCopy">Скопировать</button>
-    <button class="ghost" id="kpDownload">Скачать .txt</button>
+    <label class="row" style="gap:4px;margin-left:8px"><input type="checkbox" id="kpBroker" checked> брокер</label>
+    <button class="ghost" id="kpDownload">Скачать PDF</button>
+    <button class="ghost" id="kpCopy">Скопировать текст</button>
     <button class="btn" id="kpToCrm" style="background:#1a6b1a">→ Вернуть в CRM</button>
   </div>
   <div class="kp-preview" id="kpOut">Сначала сформируйте КП из текущего подбора или из истории.</div>
@@ -610,6 +611,8 @@ document.getElementById('calcRun').onclick = ()=>{
   lastCalc.name = p ? `${p.factory} · ${p.article} · ${p.name}` : 'Позиция (ручной ввод)';
   lastCalc.rateDate = document.getElementById('cRateDate').value;
   lastCalc.calcDate = document.getElementById('calcDate').value;
+  lastCalc.tnved = p ? (p.tnved||'') : '';
+  lastCalc.link = p ? (p.link||'') : '';
   document.getElementById('calcAdd').disabled = false;
 };
 
@@ -623,7 +626,13 @@ document.getElementById('calcAdd').onclick = ()=>{
     product_id: lastCalc.productId, name: lastCalc.name, qty: lastCalc.qty,
     cost: lastCalc.result.cost, salePrice: saleTotal/lastCalc.qty, total: saleTotal,
     rate: lastCalc.rate, rateDate: lastCalc.rateDate, calcDate: lastCalc.calcDate,
-    delivery: lastCalc.delivery, commPct: lastCalc.commPct
+    delivery: lastCalc.delivery, commPct: lastCalc.commPct,
+    // разбивка для бланка КП (юнит-экономика)
+    goodsRub: lastCalc.result.goodsRub, commRub: lastCalc.result.commission,
+    logistics: lastCalc.result.logistics, dutyRub: lastCalc.result.duty,
+    vatRub: lastCalc.result.vat,
+    tnved: lastCalc.tnved||'', dutyPct: lastCalc.dutyPct, vatPct: lastCalc.vatPct,
+    link: lastCalc.link||''
   });
   renderSelection(); msg('Позиция добавлена в подбор');
 };
@@ -668,8 +677,158 @@ async function loadHistory(){
 }
 
 /* ================== КП ================== */
-// Бланк по образцу КП_32426321-2: шапка, из чего складывается цена, детализация юнит-экономики,
-// примечания (не оферта, курс на дату оплаты инвойса, ставки ТН ВЭД на дату декларации).
+// Бланк по образцу КП_32426321-2: шапка «под ключ» (разбивка Товар/Логистика+Таможня),
+// блок «Из чего складывается», детализация юнит-экономики, примечания.
+// Числа — из нашего калькулятора: Товар = закупка+комиссия; Логистика+Таможня = логистика+пошлина+НДС(+брокер).
+function fmt2(n){ return (Math.round((+n||0)*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function kpNumber(dealId){ const d=new Date(); return (dealId||'—') + '-' + String(d.getDate()).padStart(2,'0') + String(d.getMonth()+1).padStart(2,'0'); }
+
+function kpHtml(items, total, client, delivery, broker){
+  const today = new Date();
+  const validTo = new Date(Date.now()+5*864e5);
+  const num = kpNumber(CTX.deal);
+  // агрегаты шапки
+  let goods=0, logi=0, duty=0, vat=0, comm=0;
+  items.forEach(it=>{
+    goods += (it.goodsRub ?? it.goods ?? 0);
+    logi  += (it.logistics ?? 0);
+    duty  += (it.dutyRub ?? it.duty ?? 0);
+    vat   += (it.vatRub ?? it.vat ?? 0);
+    comm  += (it.commRub ?? 0);
+  });
+  const tovar = goods + comm;                    // оплата за товар + комиссии
+  const logtam = logi + duty + vat;              // логистика + таможня
+  const grand = tovar + logtam || total || 0;
+  const pctT = grand ? (tovar/grand*100).toFixed(1) : '0.0';
+  const pctL = grand ? (logtam/grand*100).toFixed(1) : '0.0';
+  const brokerLine = broker ? `<div class="r"><span>Услуги таможенного брокера</span><b>${fmt2(BROKER_FEE)} ₽</b></div>` : '';
+
+  const rows = items.map((it,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td class="l">${esc(it.name||'')}${it.link?` <span class="mut">${esc(it.link)}</span>`:''}<br>
+        <span class="mut">${esc(it.tnved||'')} · пошл. ${it.dutyPct ?? '—'}% · НДС ${it.vatPct ?? '—'}% · ${it.qty} шт</span></td>
+      <td>${fmt2((it.goodsRub??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.goodsRub??0)}</span></td>
+      <td>${fmt2((it.logistics??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.logistics??0)}</span></td>
+      <td>${fmt2(((it.dutyRub??0)+(it.vatRub??0))/(it.qty||1))}<br><span class="mut">${fmt2((it.dutyRub??0)+(it.vatRub??0))}</span></td>
+      <td>${fmt2((it.commRub??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.commRub??0)}</span></td>
+      <td><b>${fmt2(it.salePrice ?? ((it.total||0)/(it.qty||1)))}</b><br><span class="mut">${fmt2(it.total??0)}</span></td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>КП ${num}</title>
+<style>
+  @page{size:A4;margin:14mm}
+  body{font:12px/1.45 'Segoe UI',Arial,sans-serif;color:#1a1a1a;margin:0;background:#fff}
+  .sheet{max-width:760px;margin:0 auto;padding:18px}
+  h1{font-size:20px;margin:0;letter-spacing:.5px}
+  .sub{color:#666;font-size:11px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:14px}
+  .kpnum{font-size:22px;font-weight:700}
+  .split{display:flex;gap:14px;margin:14px 0}
+  .box{flex:1;border:1px solid #ddd;border-radius:8px;padding:12px}
+  .box h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#555}
+  .big{font-size:20px;font-weight:700}
+  .pct{color:#888;font-size:11px}
+  .bar{height:8px;border-radius:4px;background:#eee;overflow:hidden;margin-top:8px;display:flex}
+  .bar i{display:block;height:100%}
+  .cols{display:flex;gap:18px;margin:14px 0}
+  .cols>div{flex:1}
+  .r{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dotted #ddd;font-size:11.5px}
+  .r span{color:#555}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11px}
+  th{background:#f2f2f2;text-transform:uppercase;font-size:9.5px;letter-spacing:.4px;color:#666;padding:6px;border:1px solid #e2e2e2;text-align:right}
+  td{padding:6px;border:1px solid #e8e8e8;text-align:right;vertical-align:top}
+  td.l{text-align:left}
+  .mut{color:#999;font-size:10px}
+  .total{display:flex;justify-content:space-between;background:#1a1a1a;color:#fff;border-radius:8px;padding:12px 16px;font-size:16px;font-weight:700;margin:12px 0}
+  .notes{font-size:10.5px;color:#555;border-top:2px solid #1a1a1a;padding-top:10px;margin-top:14px}
+  .notes li{margin:3px 0}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 6px}
+</style></head><body><div class="sheet">
+
+  <div class="head">
+    <div>
+      <h1>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</h1>
+      <div class="sub">действует до ${validTo.toLocaleDateString('ru-RU')} · дата расчёта ${today.toLocaleDateString('ru-RU')}</div>
+      ${client?`<div style="margin-top:6px;font-size:13px"><b>${esc(client)}</b></div>`:''}
+    </div>
+    <div style="text-align:right">
+      <div class="sub">№ КП</div>
+      <div class="kpnum">${esc(num)}</div>
+      <div class="sub">Транспорт: Авто · ${delivery==='cargo'?'Карго':'Белая схема'}</div>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="box">
+      <h3>Оплата за товар</h3>
+      <div class="big">${fmt2(tovar)} ₽</div>
+      <div class="pct">Товар + комиссии за трансграничный перевод · ${pctT}%</div>
+      <div class="bar"><i style="width:${pctT}%;background:#2F6BFF"></i></div>
+    </div>
+    <div class="box">
+      <h3>Логистика, таможня</h3>
+      <div class="big">${fmt2(logtam)} ₽</div>
+      <div class="pct">Платежи на таможню, логистика, СВХ${broker?', брокер':''} · ${pctL}%</div>
+      <div class="bar"><i style="width:${pctL}%;background:#7c3aed"></i></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Из чего складывается</h2>
+      <div class="r"><span>Оплата за товар (в Китай)</span><b>${fmt2(goods)} ₽</b></div>
+      <div class="r"><span>Комиссия торгового дома</span><b>${fmt2(comm)} ₽</b></div>
+      <div class="r"><span>Логистика (Китай → граница → адрес)</span><b>${fmt2(logi)} ₽</b></div>
+      <div class="r"><span>Таможенная пошлина</span><b>${fmt2(duty)} ₽</b></div>
+      <div class="r"><span>НДС при ввозе</span><b>${fmt2(vat)} ₽</b></div>
+      ${brokerLine}
+    </div>
+    <div>
+      <h2>Условия</h2>
+      <div class="r"><span>Схема</span><b>${delivery==='cargo'?'Карго — ставка «всё включено»':'Белая — пошлина + НДС'}</b></div>
+      <div class="r"><span>Курс на дату расчёта</span><b>${esc(items[0]&&items[0].rate||'—')} (${esc(items[0]&&items[0].rateDate||'—')})</b></div>
+      <div class="r"><span>Позиций</span><b>${items.length}</b></div>
+    </div>
+  </div>
+
+  <h2>Детализация · юнит-экономика</h2>
+  <table>
+    <thead><tr>
+      <th>№</th><th style="text-align:left">Наименование / ТН ВЭД</th>
+      <th>Китай,<br>₽/ед</th><th>Логистика,<br>₽/ед</th><th>Пошл.+НДС,<br>₽/ед</th><th>Услуги,<br>₽/ед</th><th>В РФ «под ключ»,<br>₽/ед</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <div class="total"><span>ИТОГО поставка «под ключ»</span><span>${fmt2(grand)} ₽</span></div>
+
+  <div class="notes">
+    <b>ПРИМЕЧАНИЯ</b>
+    <ul style="margin:6px 0 0;padding-left:16px">
+      <li>Не является офертой. Курс рассчитывается на дату оплаты инвойса по курсу банка на покупку.</li>
+      <li>Реальный вес на таможне может отличаться от данных фабрики — это меняет пошлины и расходы.</li>
+      <li>Таможенные платежи считаются по коду ТН ВЭД на дату подачи декларации по актуальному курсу.</li>
+      ${delivery==='cargo'
+        ? '<li>Карго: ставка за кг включает логистику и растаможку; брокер, пошлина и НДС отдельно не выставляются.</li>'
+        : '<li>Белая схема: в стоимость включены таможенные платежи'+(broker?' и услуги брокера':'')+'; сертификация и доставка от СВХ по РФ не включены.</li>'}
+    </ul>
+  </div>
+
+</div></body></html>`;
+}
+
+const BROKER_FEE = 17000; // услуги таможенного брокера, константа из калькуляции-шаблона (строка «Таможенная декларация»)
+
+let currentKpHtml = '', currentKp = '', currentSummary = '';
+function buildKp(items, total, client, delivery){
+  const broker = document.getElementById('kpBroker').checked;
+  currentKpHtml = kpHtml(items, total, client, delivery, broker);
+  document.getElementById('kpOut').innerHTML = currentKpHtml;
+  currentKp = kpText(items, total, client, delivery); // текстовая версия для CRM/буфера
+  currentSummary = `КП ${kpNumber(CTX.deal)}: ${items.length} поз., итог ${fmt(total)} ₽ (${delivery==='cargo'?'карго':'белая'}${broker?', брокер':''}, ${new Date().toLocaleDateString('ru-RU')})`;
+  document.querySelector('nav button[data-tab="kp"]').click();
+}
 function kpText(items, total, client, delivery){
   const L = [];
   L.push('КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ · действует до ' + new Date(Date.now()+5*864e5).toLocaleDateString('ru-RU'));
@@ -692,13 +851,6 @@ function kpText(items, total, client, delivery){
     '· Белые позиции: в стоимость включены брокер и таможенный сбор; сертификация и доставка по РФ не включены.');
   return L.join('\n');
 }
-let currentKp = '', currentSummary = '';
-function buildKp(items, total, client, delivery){
-  currentKp = kpText(items, total, client, delivery);
-  document.getElementById('kpOut').textContent = currentKp;
-  currentSummary = `Подбор: ${items.length} поз., итог ${fmt(total)} ₽ (${delivery==='cargo'?'карго':'белая'}, ${new Date().toLocaleDateString('ru-RU')})`;
-  document.querySelector('nav button[data-tab="kp"]').click();
-}
 window.kpFromHistory = id=>{
   const s = (loadHistory._rows||[]).find(r=>String(r.id)===id);
   if(!s) return;
@@ -714,11 +866,13 @@ document.getElementById('kpCopy').onclick = async ()=>{
   await navigator.clipboard.writeText(currentKp); msg('Скопировано в буфер');
 };
 document.getElementById('kpDownload').onclick = ()=>{
-  if(!currentKp) return;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\ufeff'+currentKp],{type:'text/plain;charset=utf-8'}));
-  a.download = 'КП_' + (CTX.name||'client') + '_' + new Date().toISOString().slice(0,10) + '.txt';
-  a.click(); URL.revokeObjectURL(a.href);
+  if(!currentKpHtml) return msg('Сначала сформируйте КП', false);
+  const w = window.open('', '_blank');
+  if(!w){ msg('Браузер заблокировал всплывающее окно — разрешите pop-up', false); return; }
+  w.document.write(currentKpHtml);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
 };
 // Возврат результата в CRM: виджет слушает 'china-goods:result' и пишет в поле сделки
 // (changeDealValue, RESULT_FIELD_ID в china-widget.html). Отправляем и краткий итог,
