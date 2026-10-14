@@ -78,7 +78,8 @@ h3{margin:14px 0 6px}
   <h3>Готовый бланк спецификации</h3>
   <div class="row">
     <button class="btn" id="specBuild">Сформировать</button>
-    <button class="ghost" id="specCopy">Скопировать</button>
+    <button class="ghost" id="specCopy">Скопировать текст</button>
+    <button class="ghost" id="specDocx">Скачать .docx</button>
   </div>
   <div class="kp-preview" id="specOut" style="display:none"></div>
 </section>
@@ -181,7 +182,12 @@ h3{margin:14px 0 6px}
     <button class="btn" id="selSave">Сохранить подбор</button>
     <button class="ghost" id="selClear">Очистить</button>
   </div>
-  <h3>История подборов (этой сделки)</h3>
+  <h3>История подборов</h3>
+  <div class="row">
+    <div class="field" style="min-width:260px"><label>Клиент (поиск по имени — архив и CRM)</label>
+      <input id="histFilter" placeholder="Все клиенты — начните вводить имя"></div>
+    <button class="ghost" id="histAll">показать всех</button>
+  </div>
   <table><thead><tr><th>Дата</th><th>Клиент</th><th>Доставка</th><th>Позиций</th><th>Итог, ₽</th><th></th></tr></thead>
   <tbody id="selHistory"></tbody></table>
 </section>
@@ -232,7 +238,7 @@ function applyWidgetContext(c){
   const deal = String(c.dealId||''), name = cleanName(c.clientName||'');
   if(!deal && !name) return false;
   if(deal) CTX.deal = deal;
-  if(name) CTX.name = name;
+  if(name){ CTX.name = name; const hf = document.getElementById('histFilter'); if(hf) hf.value = name; }
   renderCtxLine();
   return true;
 }
@@ -295,9 +301,10 @@ async function fillSpecProducts(){
   const sel = document.getElementById('specProduct');
   try{
     const j = await api('list','products',{});
-    sel.innerHTML = '<option value="">— выберите товар —</option>' + j.rows.map(p=>
-      `<option value="${esc(p.id)}">${esc(p.factory)} · ${esc(p.article)} · ${esc(p.name)}</option>`).join('');
-    fillSpecProducts._rows = j.rows;
+    const live = j.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
+    sel.innerHTML = '<option value="">— выберите товар —</option>' + live.map(p=>
+      `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.factory)} · ${esc(p.article)}</option>`).join('');
+    fillSpecProducts._rows = live;
   }catch(e){ msg('Каталог: '+e.message, false); }
 }
 document.getElementById('specProduct').addEventListener('change', async e=>{
@@ -364,6 +371,30 @@ document.getElementById('specCopy').onclick = async ()=>{
   const t = document.getElementById('specOut').textContent;
   if(t) { await navigator.clipboard.writeText(t); msg('Спецификация скопирована'); }
 };
+// .docx для спецификации: HTML-документ с MIME Word — открывается в Word как документ
+document.getElementById('specDocx').onclick = ()=>{
+  const p = (fillSpecProducts._rows||[]).find(r=>String(r.id)===specProductId);
+  if(!p) return msg('Выберите товар', false);
+  const params = collectSpec();
+  const rows = params.filter(([k,v])=>k||v).map(([k,v])=>
+    `<tr><td style="border:1px solid #999;padding:6px;width:220px">${esc(k)}</td><td style="border:1px solid #999;padding:6px">${esc(v)}</td></tr>`).join('');
+  const photoHtml = p.photo ? `<p><img src="${esc(p.photo)}" style="max-width:300px"></p>` : '';
+  const htmlDoc = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+    <style>body{font:12pt 'Times New Roman'} h1{font-size:16pt} table{border-collapse:collapse}</style></head><body>
+    <h1>СПЕЦИФИКАЦИЯ ТОВАРА</h1>
+    <p><b>Товар:</b> ${esc(p.name)}<br><b>Фабрика:</b> ${esc(p.factory)} · <b>артикул:</b> ${esc(p.article)}<br>
+    <b>Цена фабрики:</b> ${esc(p.price)} ${esc(p.currency)} (дата цены: ${esc(p.price_date||'—')})<br>
+    ${p.tnved?`<b>Код ТН ВЭД:</b> ${esc(p.tnved)}<br>`:''}${p.link?`<b>Ссылка:</b> ${esc(p.link)}`:''}</p>
+    ${photoHtml}
+    <table>${rows}</table>
+    <p>— Сформировано ${new Date().toLocaleDateString('ru-RU')}</p></body></html>`;
+  const blob = new Blob(['\ufeff'+htmlDoc], {type:'application/msword'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Спецификация_' + (p.name||'товар').replace(/[^\wа-яё]+/gi,'_').slice(0,40) + '.doc';
+  a.click(); URL.revokeObjectURL(a.href);
+  msg('Файл спецификации скачан (.doc — открывается в Word)');
+};
 
 /* ================== КАТАЛОГ ================== */
 const PRODUCT_FIELDS = ['factory','article','name','price','currency','weight','tnved','duty','vat','price_date','photo','notes'];
@@ -381,7 +412,8 @@ async function loadCatalog(){
       (byProd[it.product_id] = byProd[it.product_id] || []).push(it);
     });
     loadCatalog._picks = byProd;
-    document.getElementById('catList').innerHTML = prods.rows.map(p=>{
+    const live = prods.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
+    document.getElementById('catList').innerHTML = live.map(p=>{
       const used = byProd[p.id]||[];
       const usedHtml = used.length
         ? `<div class="note">Подбирали: ${used.map(u=>`${esc(u.client_name||u.deal_id)} (${String(u.calc_date||'').slice(0,10)}, ${esc(u.qty)} шт)`).join('; ')}</div>` : '';
@@ -395,7 +427,7 @@ async function loadCatalog(){
           <button class="ghost" onclick="toSpec('${esc(p.id)}')">спецификация</button>
         </div></div></div>`;
     }).join('') || '<p class="note">Каталог пуст</p>';
-    loadCatalog._rows = prods.rows;
+    loadCatalog._rows = live;
   }catch(e){ msg('Каталог: '+e.message, false); }
 }
 window.toSpec = id=>{
@@ -553,9 +585,10 @@ async function fillCalcProducts(){
   const sel = document.getElementById('calcProduct');
   try{
     const j = await api('list','products',{});
-    sel.innerHTML = '<option value="">— вручную —</option>' + j.rows.map(p=>
-      `<option value="${esc(p.id)}">${esc(p.factory)} · ${esc(p.article)} · ${esc(p.name)}</option>`).join('');
-    fillCalcProducts._rows = j.rows;
+    const live = j.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
+    sel.innerHTML = '<option value="">— вручную —</option>' + live.map(p=>
+      `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.factory)} · ${esc(p.article)}</option>`).join('');
+    fillCalcProducts._rows = live;
   }catch(e){ msg('Каталог: '+e.message, false); }
 }
 window.toCalc = function(id){
@@ -662,19 +695,52 @@ document.getElementById('selSave').onclick = async ()=>{
   }catch(e){ msg(e.message, false); }
 };
 async function loadHistory(){
-  if(!CTX.deal) return;
   try{
-    const j = await api('list','selections',{where:{deal_id:CTX.deal}});
-    j.rows.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
-    document.getElementById('selHistory').innerHTML = j.rows.map(s=>{
-      let n=0; try{ n = JSON.parse(s.items_json).length; }catch(e){}
-      return `<tr><td>${esc((s.created_at||'').slice(0,16).replace('T',' '))}</td><td>${esc(s.client_name)}</td>
-        <td>${s.delivery==='cargo'?'карго':'белая'}</td><td class="num">${n}</td><td class="num">${fmt(s.total_rub)}</td>
-        <td><button class="ghost" onclick="kpFromHistory('${esc(s.id)}')">→ КП</button></td></tr>`;
-    }).join('') || '<tr><td colspan="6" class="note">История пуста</td></tr>';
-    loadHistory._rows = j.rows;
+    // грузим всю историю (сделка + архив); фильтрация — полем histFilter
+    const j = await api('list','selections',{});
+    const live = j.rows.filter(s=>s.client_name && s.client_name!=='__deleted__');
+    live.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+    loadHistory._all = live;
+    renderHistory();
   }catch(e){ msg('История: '+e.message, false); }
 }
+function renderHistory(){
+  const q = (document.getElementById('histFilter').value||'').trim().toLowerCase();
+  const rows = (loadHistory._all||[]).filter(s=>{
+    if(!q) return true;
+    return String(s.client_name||'').toLowerCase().includes(q);
+  });
+  document.getElementById('selHistory').innerHTML = rows.map(s=>{
+    let n=0; try{ n = JSON.parse(s.items_json).length; }catch(e){}
+    const src = s.source==='archive-import' ? ' <span class="pill">архив</span>' : '';
+    return `<tr><td>${esc((s.created_at||'').slice(0,16).replace('T',' '))}</td><td>${esc(s.client_name)}${src}</td>
+      <td>${s.delivery==='cargo'?'карго':(s.delivery?'белая':'—')}</td><td class="num">${n}</td><td class="num">${fmt(s.total_rub)}</td>
+      <td><button class="ghost" onclick="selView('${esc(s.id)}')">смотреть</button>
+          <button class="ghost" onclick="kpFromHistory('${esc(s.id)}')">→ КП</button></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="note">Ничего не найдено</td></tr>';
+  loadHistory._rows = rows;
+}
+document.getElementById('histFilter').addEventListener('input', renderHistory);
+document.getElementById('histAll').onclick = ()=>{ document.getElementById('histFilter').value=''; renderHistory(); };
+// просмотр содержимого подбора (текст архива / позиции)
+window.selView = id=>{
+  const s = (loadHistory._all||[]).find(r=>String(r.id)===id);
+  if(!s) return;
+  let items=[]; try{ items = JSON.parse(s.items_json); }catch(e){}
+  const txt = items.map(it=>it.note ? it.note : `• ${it.name||''} — ${it.qty||''} шт × ${fmt(it.salePrice||0)} ₽`).join('\n\n');
+  const w = window.open('', '_blank');
+  if(w){
+    w.document.write(`<meta charset="utf-8"><title>Подбор: ${esc(s.client_name)}</title>
+      <body style="font:14px/1.5 sans-serif;max-width:800px;margin:20px auto;padding:0 16px">
+      <h2>${esc(s.client_name)} — подбор от ${esc((s.created_at||'').slice(0,10))}</h2>
+      <pre style="white-space:pre-wrap;font:13px/1.6 sans-serif">${esc(txt)}</pre></body>`);
+    w.document.close();
+  }
+};
+// при открытии из карточки сделки: сразу подставляем имя клиента в фильтр
+if(CTX.name){ document.getElementById('histFilter').value = CTX.name; }
+const __origApplyCtx = applyWidgetContext;
+applyWidgetContext = function(c){ const ok = __origApplyCtx(c); if(ok) renderHistory(); return ok; };
 
 /* ================== КП ================== */
 // Бланк по образцу КП_32426321-2: шапка «под ключ» (разбивка Товар/Логистика+Таможня),
