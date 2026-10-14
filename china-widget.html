@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Товары из Китая — виджет EnvyCRM</title>
+<!-- Виджет первого уровня: кнопка в карточке сделки, открытие приложения,
+     приём результата расширения и запись его в поле сделки (возврат в CRM). -->
+<script src="https://cdn.saas-support.com/crm_assets/build/widget/js/envycrmwidget.min.js"></script>
+<style>body{font:13px/1.4 sans-serif;padding:12px;color:#333}.err{color:#c00}.ok{color:#1a6b1a}</style>
+</head>
+<body>
+<div id="status">Инициализация…</div>
+<script>
+(function(){
+  var APP = 'china-app.html'; // на том же GitHub Pages
+
+  // !!! ПРОВЕРИТЬ В ЦЕЛЕВОЙ CRM:
+  // Поле «Подбор товаров (итог)» у вас типа «файл» — changeDealValue пишет только значение
+  // (текст/ссылку), загрузка файла в поле через SDK не документирована. Два варианта:
+  //  а) оставить поле типа «файл» — тогда запись текста не сработает, результат будет
+  //     только показан в статусе виджета (см. код ниже);
+  //  б) пересоздать поле как «текст/многострочный текст» — тогда итог будет записываться.
+  // Подставьте input_id поля (виден в настройках/Network после сохранения поля).
+  var RESULT_FIELD_ID = 0; // например 2244
+
+  function cleanName(s){ if(!s) return ''; return String(s).split('::')[0].replace(/\*/g,'').trim(); }
+  function setStatus(t, cls){ var el=document.getElementById('status'); el.textContent=t; el.className=cls||''; }
+
+  function openApp(dealId, clientName){
+    var url = APP + '?deal=' + encodeURIComponent(dealId||'') +
+              '&name=' + encodeURIComponent(cleanName(clientName||''));
+    var w = window.EnvyCrmWidget;
+    try{
+      var res = w.openPage({content:'<iframe src="'+url+'" style="width:100%;height:100vh;border:0"></iframe>'});
+      if(res && typeof res.then==='function') res.catch(function(){ window.open(url,'_blank'); });
+    }catch(e){ window.open(url,'_blank'); }
+  }
+
+  function ready(fn){
+    var n=0;
+    (function poll(){
+      if(window.EnvyCrmWidget) return fn(window.EnvyCrmWidget);
+      if(++n>50) return setStatus('SDK EnvyCrmWidget не загрузился', 'err');
+      setTimeout(poll, 200);
+    })();
+  }
+
+  ready(function(w){
+    setStatus('Готово. Кнопка «Подбор товаров» в карточке сделки.', 'ok');
+
+    w.init({
+      'deal-btn': function(params){ // схема params не документирована — не используем
+        return [{
+          title: 'Подбор товаров',
+          styles: { color:'#fff', 'background-color':'#2F6BFF' },
+          icon: 'md-content-paste',
+          clickEventName: 'china-goods:open',
+          position: ['first'],
+          name: 'china-goods-deal-button'
+        }];
+      }
+    });
+
+    window.addEventListener('message', function(ev){
+      // TODO: после подтверждения домена CRM проверять ev.origin.
+      if(!ev.data) return;
+
+      // клик по кнопке сделки
+      if(ev.data.type === 'china-goods:open'){
+        var dealId='', clientName='';
+        Promise.resolve(w.getDeal()).then(function(d){
+          var deal=(d&&d.result)?d.result:d;
+          if(deal) dealId = deal.id || deal.ID || '';
+          // input_id 1001 (имя) — из рабочего примера КП; в документации не подтверждено
+          return w.getClientValue({input_id:1001, type:'service'});
+        }).then(function(v){
+          clientName = (v && v.result!==undefined) ? v.result : (v && v.value) || '';
+          openApp(dealId, clientName);
+        }).catch(function(){ openApp(dealId, clientName); });
+      }
+
+      // возврат результата из расширения: {type:'china-goods:result', deal_id, summary, fileName, fileBase64}
+      if(ev.data.type === 'china-goods:result'){
+        var summary = String(ev.data.summary||'');
+        if(!RESULT_FIELD_ID){ setStatus('Результат получен, но RESULT_FIELD_ID не задан: '+summary.slice(0,120), 'err'); return; }
+        // changeDealValue пишет значение поля; для поля типа «файл» передаём текст КП —
+        // принятие файла через changeDealValue в документации не описано, проверить в CRM.
+        var value = ev.data.fileBase64 ? String(ev.data.fileBase64) : summary;
+        Promise.resolve(w.changeDealValue({input_id:RESULT_FIELD_ID, value:value}))
+          .then(function(){ setStatus('Итог записан в сделку', 'ok'); })
+          .catch(function(e){ setStatus('Не удалось записать в поле сделки: '+e, 'err'); });
+      }
+    }, false);
+  });
+})();
+</script>
+</body>
+</html>
