@@ -12,16 +12,12 @@
 <div id="status">Инициализация…</div>
 <script>
 (function(){
-  var APP = 'china-app.html'; // на том же GitHub Pages
+  var APP = 'https://alenik9024-cell.github.io/china-goods-ext/china-app.html';
 
-  // !!! ПРОВЕРИТЬ В ЦЕЛЕВОЙ CRM:
-  // Поле «Подбор товаров (итог)» у вас типа «файл» — changeDealValue пишет только значение
-  // (текст/ссылку), загрузка файла в поле через SDK не документирована. Два варианта:
-  //  а) оставить поле типа «файл» — тогда запись текста не сработает, результат будет
-  //     только показан в статусе виджета (см. код ниже);
-  //  б) пересоздать поле как «текст/многострочный текст» — тогда итог будет записываться.
-  // Подставьте input_id поля (виден в настройках/Network после сохранения поля).
-  var RESULT_FIELD_ID = 0; // например 2244
+  // Поле «Подбор товаров (итог)»: input_id=1113458 (подтверждено в Network: update_field_value,
+  // deal 116654102). Поле файловое: CRM прикрепляет файлы через /api/v2/common/file + files[]:(binary),
+  // поэтому changeDealValue запишет туда только текст итога, не файл.
+  var RESULT_FIELD_ID = 1113458;
 
   function cleanName(s){ if(!s) return ''; return String(s).split('::')[0].replace(/\*/g,'').trim(); }
   function setStatus(t, cls){ var el=document.getElementById('status'); el.textContent=t; el.className=cls||''; }
