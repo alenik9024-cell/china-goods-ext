@@ -52,7 +52,7 @@ function doGet(e){
   return out_({ok:true, service:'china-goods', time:new Date().toISOString()});
 }
 const SHEETS = {
-  products:  ['id','factory','article','name','price','currency','weight','tnved','duty','vat','price_date','photo','notes','updated_at'],
+  products:  ['id','factory','article','name','price','currency','weight','tnved','duty','vat','price_date','photo','notes','updated_at','link'],
   specs:     ['id','product_id','params_json','updated_at'],
   rates:     ['id','currency','rate','date'],
   selections:['id','deal_id','client_name','created_at','calc_date','delivery','items_json','total_rub','source'],

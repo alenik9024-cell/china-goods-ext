@@ -5,8 +5,9 @@
 <title>Подбор товаров из Китая</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="client-files.js"></script>
 <style>
-:root{--blue:#2F6BFF;--bd:#ddd;--muted:#777;--bg:#f2f4f8}
+:root{--blue:#2F6BFF;--bd:#ddd;--muted:#777;--bg:#f2f4f8;--ok:#1a6b1a;--warn:#b45309}
 *{box-sizing:border-box}
 body{font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#222}
 header{background:var(--blue);color:#fff;padding:10px 16px}
@@ -15,7 +16,7 @@ header .ctx{font-size:12px;opacity:.85;margin-top:2px}
 nav{display:flex;gap:2px;background:var(--bg);padding:0 8px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
 nav button{border:0;background:none;padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent}
 nav button.active{border-bottom-color:var(--blue);color:var(--blue);font-weight:600}
-section{display:none;padding:16px;max-width:1100px}
+section{display:none;padding:16px;max-width:1150px}
 section.active{display:block}
 table{border-collapse:collapse;width:100%;margin:8px 0}
 th,td{border:1px solid var(--bd);padding:6px 8px;font-size:13px;text-align:left;vertical-align:top}
@@ -23,25 +24,41 @@ th{background:#f7f7f7}
 input,select,textarea{padding:5px 7px;border:1px solid var(--bd);border-radius:4px;font-size:13px}
 button.btn{background:var(--blue);color:#fff;border:0;border-radius:4px;padding:7px 14px;cursor:pointer}
 button.ghost{background:#fff;border:1px solid var(--bd);border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px}
+button.ghost:hover{border-color:var(--blue);color:var(--blue)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0}
 .field{display:flex;flex-direction:column;gap:2px}
 .field label{font-size:11px;color:var(--muted)}
 .msg{padding:8px 10px;border-radius:4px;margin:8px 16px;display:none}
-.msg.ok{display:block;background:#e7f6e7;color:#1a6b1a}
+.msg.ok{display:block;background:#e7f6e7;color:var(--ok)}
 .msg.err{display:block;background:#fdeaea;color:#a00}
 .note{font-size:12px;color:var(--muted)}
 td.num{text-align:right;white-space:nowrap}
 h3{margin:14px 0 6px}
 .del{color:#a00;cursor:pointer;border:0;background:none}
 .card{display:flex;gap:10px;border:1px solid var(--bd);border-radius:6px;padding:8px;margin:6px 0;background:#fff}
-.card img{width:72px;height:72px;object-fit:cover;border-radius:4px;border:1px solid var(--bd)}
+.card img{width:72px;height:72px;object-fit:cover;border-radius:4px;border:1px solid var(--bd);cursor:pointer}
 .card .ph{width:72px;height:72px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:4px;color:var(--muted);font-size:11px}
-.card .body{flex:1}
+.card .body{flex:1;min-width:0}
 .card .t{font-weight:600}
-.specgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .pill{display:inline-block;background:var(--bg);border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px}
+.pill.warn{background:#fef3c7;color:var(--warn)}
+.pill.ok{background:#e7f6e7;color:var(--ok)}
 #mapTable select{max-width:150px}
 .kp-preview{white-space:pre-wrap;font:13px/1.5 monospace;background:#fff;border:1px solid var(--bd);border-radius:6px;padding:12px;margin-top:8px}
+.thumb{width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid var(--bd);vertical-align:middle}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.sel-card{display:flex;gap:10px;align-items:center;border:1px solid var(--bd);border-radius:6px;padding:8px;margin:6px 0;background:#fff}
+.sel-card .grow{flex:1;min-width:0}
+.chk{display:flex;gap:6px;align-items:center;padding:4px 0;font-size:13px}
+.chk input{width:auto}
+.audit{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:6px 0}
+.audit b{color:#222}
+.histItems{display:none;background:#fafbfc;border:1px solid var(--bd);border-radius:6px;padding:8px;margin:4px 0 10px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
+.fgrid .f{border:1px solid var(--bd);border-radius:6px;padding:6px;background:#fff;font-size:12px;overflow:hidden}
+.fgrid .f img{width:100%;height:110px;object-fit:cover;border-radius:4px;background:var(--bg)}
+.fgrid .f .n{display:block;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -50,90 +67,102 @@ h3{margin:14px 0 6px}
   <div class="ctx" id="ctxLine">Без контекста сделки (открыто напрямую)</div>
 </header>
 <nav>
-  <button data-tab="spec">Спецификация</button>
+  <button data-tab="picks">Подбор</button>
   <button data-tab="catalog">Каталог</button>
-  <button data-tab="rates">Курсы</button>
   <button data-tab="calc">Калькулятор</button>
-  <button data-tab="picks">Подборы</button>
+  <button data-tab="spec">Спецификация</button>
+  <button data-tab="archive">Архив клиента</button>
+  <button data-tab="rates">Курсы</button>
   <button data-tab="kp">КП</button>
 </nav>
 <div class="msg" id="msg"></div>
 
-<!-- ================= СПЕЦИФИКАЦИЯ ================= -->
-<section id="tab-spec">
+<!-- ================= ПОДБОР ================= -->
+<section id="tab-picks">
+  <h3>Текущий подбор: <span id="selClient"></span> <span class="pill" id="selDelivery"></span>
+    <span class="pill ok" id="draftBadge" style="display:none">черновик сохранён</span></h3>
+
+  <div class="row" style="background:var(--bg);border-radius:6px;padding:8px">
+    <div class="field" style="min-width:280px;flex:1"><label>Быстрое добавление из каталога</label>
+      <input id="qaSearch" placeholder="Начните вводить товар, фабрику или артикул…"></div>
+  </div>
+  <div id="qaResults"></div>
+
+  <div id="selCards"></div>
+  <table><tfoot><tr><th style="text-align:right">ИТОГО</th><th id="selTotal" class="num" style="width:130px"></th></tr></tfoot></table>
   <div class="row">
-    <div class="field" style="min-width:300px;flex:1"><label>Товар из каталога</label>
-      <select id="specProduct"><option value="">— выберите товар —</option></select></div>
-    <button class="ghost" id="specNew">＋ новый товар</button>
+    <button class="btn" id="selSave">Сохранить подбор</button>
+    <button class="ghost" id="selClear">Очистить</button>
+    <span class="note">Черновик подбора сохраняется автоматически — при случайном закрытии позиции не пропадут.</span>
   </div>
-  <div id="specEditor" style="display:none">
-    <p class="note">Параметры подбора этого товара. Набор полей можно менять (добавляйте свои строки) — всё сохраняется за товаром и подставляется в спецификацию и КП.</p>
-    <table id="specTable"><thead><tr><th style="width:220px">Параметр</th><th>Значение</th><th style="width:30px"></th></tr></thead><tbody></tbody></table>
-    <div class="row">
-      <button class="ghost" id="specAddRow">＋ параметр</button>
-      <button class="btn" id="specSave">Сохранить спецификацию товара</button>
-      <span class="note" id="specSaved"></span>
-    </div>
-  </div>
-  <h3>Готовый бланк спецификации</h3>
+
+  <h3>История подборов</h3>
   <div class="row">
-    <button class="btn" id="specBuild">Сформировать</button>
-    <button class="ghost" id="specCopy">Скопировать текст</button>
-    <button class="ghost" id="specDocx">Скачать .docx</button>
+    <div class="field" style="min-width:260px"><label>Клиент</label>
+      <input id="histFilter" placeholder="Все клиенты — начните вводить имя"></div>
+    <label class="chk"><input type="checkbox" id="histOnlyClient"> только текущий клиент</label>
+    <button class="ghost" id="histAll">показать всех</button>
   </div>
-  <div class="kp-preview" id="specOut" style="display:none"></div>
+  <table><thead><tr><th>Дата</th><th>Клиент</th><th>Доставка</th><th>Позиций</th><th>Итог, ₽</th><th></th></tr></thead>
+  <tbody id="selHistory"></tbody></table>
 </section>
 
 <!-- ================= КАТАЛОГ ================= -->
 <section id="tab-catalog">
   <div class="row">
-    <input type="file" id="impFile" accept=".xlsx,.xls,.csv">
-    <button class="ghost" id="impParse">Прочитать файл</button>
-    <button class="btn" id="prodNewBtn">＋ добавить товар</button>
+    <div class="field" style="min-width:280px;flex:1"><label>Поиск по каталогу</label>
+      <input id="catSearch" placeholder="Название, фабрика, артикул…"></div>
+    <div class="field"><label>Полнота данных</label>
+      <select id="catAuditFilter">
+        <option value="">все товары</option>
+        <option value="nophoto">без фото</option>
+        <option value="noprice">без цены</option>
+        <option value="nolink">без ссылки</option>
+        <option value="incomplete">неполные (чего-то не хватает)</option>
+      </select></div>
+    <button class="ghost" id="catReload">обновить</button>
   </div>
-  <div id="mapBlock" style="display:none">
-    <p class="note">Сопоставьте колонки файла полям каталога. Совпадение: фабрика + артикул (существующие обновляются, id сохраняется).</p>
-    <table id="mapTable"><thead><tr><th>Колонка файла</th><th>Поле каталога</th></tr></thead><tbody></tbody></table>
-    <button class="btn" id="impRun">Импортировать</button>
-  </div>
-  <div id="prodForm" style="display:none;border:1px solid var(--bd);border-radius:6px;padding:10px;margin:8px 0">
-    <div class="row">
-      <div class="field"><label>Фабрика</label><input id="pFactory"></div>
-      <div class="field"><label>Артикул</label><input id="pArticle"></div>
-      <div class="field" style="min-width:220px"><label>Наименование</label><input id="pName"></div>
-      <div class="field"><label>Цена</label><input id="pPrice" type="number" step="0.01"></div>
-      <div class="field"><label>Валюта</label><select id="pCurrency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
-    </div>
-    <div class="row">
-      <div class="field"><label>Вес ед., кг</label><input id="pWeight" type="number" step="0.001"></div>
-      <div class="field"><label>Код ТН ВЭД</label><input id="pTnved"></div>
-      <div class="field"><label>Пошлина, %</label><input id="pDuty" type="number" step="0.1"></div>
-      <div class="field"><label>НДС, %</label><input id="pVat" type="number" step="0.1" value="22"></div>
-      <div class="field"><label>Дата цены</label><input id="pPriceDate" type="date"></div>
-    </div>
-    <div class="row">
-      <div class="field" style="flex:1"><label>Фото (URL или загрузка файла → Google Диск)</label><input id="pPhoto" placeholder="https://…">
-        <input type="file" id="pPhotoFile" accept="image/*">
-        <span class="note" id="pPhotoStatus"></span></div>
-      <div class="field" style="flex:1"><label>Заметки</label><input id="pNotes"></div>
-    </div>
-    <button class="btn" id="prodSave">Сохранить товар</button>
-  </div>
-  <h3>Товары <button class="ghost" id="catReload">обновить</button></h3>
-  <div id="catList"></div>
-</section>
+  <div class="audit" id="catAudit"></div>
 
-<!-- ================= КУРСЫ ================= -->
-<section id="tab-rates">
-  <p class="note">Курсы вводятся вручную и хранятся по датам. Из открытых источников не берём. При расчёте подставляется курс, действующий на дату расчёта (последний ≤ даты), и его дата сохраняется в подборе.</p>
-  <div class="row">
-    <div class="field"><label>Валюта</label>
-      <select id="rateCur"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
-    <div class="field"><label>Курс (₽)</label><input id="rateVal" type="number" step="0.0001"></div>
-    <div class="field"><label>Дата</label><input id="rateDate" type="date"></div>
-    <button class="btn" id="rateAdd">Сохранить курс</button>
-  </div>
-  <table><thead><tr><th>Валюта</th><th>Курс</th><th>Дата</th></tr></thead><tbody id="rateList"></tbody></table>
+  <details style="margin:10px 0">
+    <summary style="cursor:pointer;font-size:13px">Импорт из файла / добавление товара вручную</summary>
+    <div class="row" style="margin-top:8px">
+      <input type="file" id="impFile" accept=".xlsx,.xls,.csv">
+      <button class="ghost" id="impParse">Прочитать файл</button>
+      <button class="btn" id="prodNewBtn">＋ добавить товар</button>
+    </div>
+    <div id="mapBlock" style="display:none">
+      <p class="note">Сопоставьте колонки файла полям каталога. Совпадение: фабрика + артикул (существующие обновляются, id сохраняется, загруженные товары не затираются).</p>
+      <table id="mapTable"><thead><tr><th>Колонка файла</th><th>Поле каталога</th></tr></thead><tbody></tbody></table>
+      <button class="btn" id="impRun">Импортировать</button>
+    </div>
+    <div id="prodForm" style="display:none;border:1px solid var(--bd);border-radius:6px;padding:10px;margin:8px 0">
+      <div class="row">
+        <div class="field"><label>Фабрика</label><input id="pFactory"></div>
+        <div class="field"><label>Артикул</label><input id="pArticle"></div>
+        <div class="field" style="min-width:220px"><label>Наименование</label><input id="pName"></div>
+        <div class="field" style="flex:1;min-width:220px"><label>Ссылка на товар / фабрику</label><input id="pLink" placeholder="https://…"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Цена</label><input id="pPrice" type="number" step="0.01"></div>
+        <div class="field"><label>Валюта</label><select id="pCurrency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+        <div class="field"><label>Вес ед., кг</label><input id="pWeight" type="number" step="0.001"></div>
+        <div class="field"><label>Код ТН ВЭД</label><input id="pTnved"></div>
+        <div class="field"><label>Пошлина, %</label><input id="pDuty" type="number" step="0.1"></div>
+        <div class="field"><label>НДС, %</label><input id="pVat" type="number" step="0.1" value="22"></div>
+        <div class="field"><label>Дата цены</label><input id="pPriceDate" type="date"></div>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1"><label>Фото (URL или загрузка файла → Google Диск)</label><input id="pPhoto" placeholder="https://…">
+          <input type="file" id="pPhotoFile" accept="image/*">
+          <span class="note" id="pPhotoStatus"></span></div>
+        <div class="field" style="flex:1"><label>Заметки</label><input id="pNotes"></div>
+      </div>
+      <button class="btn" id="prodSave">Сохранить товар</button>
+    </div>
+  </details>
+
+  <div id="catList"></div>
 </section>
 
 <!-- ================= КАЛЬКУЛЯТОР ================= -->
@@ -148,6 +177,7 @@ h3{margin:14px 0 6px}
         <option value="cargo">Карго (единая ставка, без брокера)</option>
       </select></div>
   </div>
+  <div id="calcProdCard" style="display:none"></div>
   <div class="row">
     <div class="field"><label>Цена фабрики</label><input id="cPrice" type="number" step="0.01"></div>
     <div class="field"><label>Валюта</label><select id="cCur"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
@@ -172,24 +202,65 @@ h3{margin:14px 0 6px}
   <button class="btn" id="calcAdd" disabled>Добавить в подбор</button>
 </section>
 
-<!-- ================= ПОДБОРЫ ================= -->
-<section id="tab-picks">
-  <h3>Текущий подбор: <span id="selClient"></span> <span class="pill" id="selDelivery"></span></h3>
-  <table><thead><tr><th>Товар</th><th>Кол-во</th><th>Цена в РФ, ₽/ед</th><th>Курс</th><th>Дата курса</th><th>Дата расчёта</th><th>Сумма, ₽</th><th></th></tr></thead>
-  <tbody id="selItems"></tbody>
-  <tfoot><tr><th colspan="6" style="text-align:right">ИТОГО</th><th id="selTotal" class="num"></th><th></th></tr></tfoot></table>
+<!-- ================= СПЕЦИФИКАЦИЯ ================= -->
+<section id="tab-spec">
+  <h3>Спецификация по нескольким товарам (рекомендуется)</h3>
+  <p class="note">Отметьте товары галочками — соберётся единая спецификация по всем, с параметрами каждого товара, ценами и ссылками.</p>
   <div class="row">
-    <button class="btn" id="selSave">Сохранить подбор</button>
-    <button class="ghost" id="selClear">Очистить</button>
+    <div class="field" style="min-width:260px;flex:1"><label>Поиск товара</label>
+      <input id="specMultiSearch" placeholder="Название, фабрика, артикул…"></div>
+    <button class="btn" id="specMultiBuild">Сформировать по отмеченным</button>
+    <button class="ghost" id="specMultiCopy">Скопировать текст</button>
+    <button class="ghost" id="specMultiDocx">Скачать .doc</button>
   </div>
-  <h3>История подборов</h3>
+  <div id="specMultiList" style="max-height:300px;overflow:auto;border:1px solid var(--bd);border-radius:6px;padding:6px"></div>
+  <div class="kp-preview" id="specMultiOut" style="display:none"></div>
+
+  <h3 style="margin-top:22px">Параметры подбора одного товара</h3>
   <div class="row">
-    <div class="field" style="min-width:260px"><label>Клиент (поиск по имени — архив и CRM)</label>
-      <input id="histFilter" placeholder="Все клиенты — начните вводить имя"></div>
-    <button class="ghost" id="histAll">показать всех</button>
+    <div class="field" style="min-width:300px;flex:1"><label>Товар из каталога</label>
+      <select id="specProduct"><option value="">— выберите товар —</option></select></div>
+    <button class="ghost" id="specNew">＋ новый товар</button>
   </div>
-  <table><thead><tr><th>Дата</th><th>Клиент</th><th>Доставка</th><th>Позиций</th><th>Итог, ₽</th><th></th></tr></thead>
-  <tbody id="selHistory"></tbody></table>
+  <div id="specEditor" style="display:none">
+    <p class="note">Набор полей можно менять (добавляйте свои строки) — всё сохраняется за товаром и подставляется в спецификацию и КП.</p>
+    <table id="specTable"><thead><tr><th style="width:220px">Параметр</th><th>Значение</th><th style="width:30px"></th></tr></thead><tbody></tbody></table>
+    <div class="row">
+      <button class="ghost" id="specAddRow">＋ параметр</button>
+      <button class="btn" id="specSave">Сохранить параметры товара</button>
+      <span class="note" id="specSaved"></span>
+    </div>
+  </div>
+  <div class="row">
+    <button class="ghost" id="specBuild">Бланк по одному товару (устаревший режим)</button>
+    <button class="ghost" id="specCopy">Скопировать текст</button>
+    <button class="ghost" id="specDocx">Скачать .doc</button>
+  </div>
+  <div class="kp-preview" id="specOut" style="display:none"></div>
+</section>
+
+<!-- ================= АРХИВ КЛИЕНТА ================= -->
+<section id="tab-archive">
+  <p class="note">Файлы из сборщика «Архив клиентов»: фото подобранных товаров, калькуляции, логистика. По клиенту из карточки сделки список подставляется автоматически.</p>
+  <div class="row">
+    <div class="field" style="min-width:280px;flex:1"><label>Клиент</label>
+      <input id="archSearch" placeholder="Имя или компания клиента…"></div>
+  </div>
+  <div id="archClients"></div>
+  <div id="archFiles"></div>
+</section>
+
+<!-- ================= КУРСЫ ================= -->
+<section id="tab-rates">
+  <p class="note">Курсы вводятся вручную и хранятся по датам. При расчёте подставляется курс, действующий на дату расчёта (последний ≤ даты), и его дата сохраняется в подборе.</p>
+  <div class="row">
+    <div class="field"><label>Валюта</label>
+      <select id="rateCur"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+    <div class="field"><label>Курс (₽)</label><input id="rateVal" type="number" step="0.0001"></div>
+    <div class="field"><label>Дата</label><input id="rateDate" type="date"></div>
+    <button class="btn" id="rateAdd">Сохранить курс</button>
+  </div>
+  <table><thead><tr><th>Валюта</th><th>Курс</th><th>Дата</th></tr></thead><tbody id="rateList"></tbody></table>
 </section>
 
 <!-- ================= КП ================= -->
@@ -199,7 +270,7 @@ h3{margin:14px 0 6px}
     <label class="row" style="gap:4px;margin-left:8px"><input type="checkbox" id="kpBroker" checked> брокер</label>
     <button class="ghost" id="kpDownload">Скачать PDF</button>
     <button class="ghost" id="kpCopy">Скопировать текст</button>
-    <button class="btn" id="kpToCrm" style="background:#1a6b1a">→ Вернуть в CRM</button>
+    <button class="btn" id="kpToCrm" style="background:var(--ok)">→ Вернуть в CRM</button>
   </div>
   <div class="kp-preview" id="kpOut">Сначала сформируйте КП из текущего подбора или из истории.</div>
 </section>
@@ -207,11 +278,11 @@ h3{margin:14px 0 6px}
 <script>
 'use strict';
 /* ================== НАСТРОЙКИ ================== */
+const APP_VERSION = 'v4';
 const API = {
   url: 'https://script.google.com/macros/s/AKfycbwfj1cxO9FcX8sUnnUIiYWD_BcU1EgJKjUQ5dsdrFhB39QgUrsKLhWIMrJRIRcKmkaZIg/exec',
   token: '668c640b-7e35-4f20-a0e1-914df62f33b6'
 };
-// Ставка комиссии по умолчанию (можно менять в калькуляторе)
 const DEFAULT_COMMISSION_PCT = 10;
 
 /* ================== КОНТЕКСТ ================== */
@@ -219,9 +290,6 @@ const qs = new URLSearchParams(location.search);
 const CTX = { deal: qs.get('deal') || '', name: cleanName(qs.get('name') || '') };
 function cleanName(s){ if(!s) return ''; return String(s).split('::')[0].replace(/\*/g,'').trim(); }
 
-/* Контекст из виджета: виджет сохраняет {token, dealId, clientName} в localStorage
-   (схема рабочей связки kp). Читаем по context_token из URL; контекст может прийти
-   позже — опрашиваем несколько секунд. */
 const CTX_TOKEN = qs.get('context_token') || '';
 function readWidgetContext(){
   if(!CTX_TOKEN) return null;
@@ -237,9 +305,15 @@ function applyWidgetContext(c){
   if(!c) return false;
   const deal = String(c.dealId||''), name = cleanName(c.clientName||'');
   if(!deal && !name) return false;
+  const hadDeal = CTX.deal;
   if(deal) CTX.deal = deal;
   if(name){ CTX.name = name; const hf = document.getElementById('histFilter'); if(hf) hf.value = name; }
   renderCtxLine();
+  if(deal && deal !== hadDeal) restoreDraft(); // контекст пришёл позже — подтягиваем черновик этой сделки
+  const hc = document.getElementById('histOnlyClient');
+  if(hc && name && !hc.dataset.touched){ hc.checked = true; renderHistory(); }
+  const as = document.getElementById('archSearch');
+  if(as && name && !as.value) { as.value = name; renderArchive(); }
   return true;
 }
 function renderCtxLine(){
@@ -272,25 +346,495 @@ function msg(t, ok){
 }
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => (Math.round((+n||0)*100)/100).toLocaleString('ru-RU');
+const isImg = n => /\.(jpe?g|png|gif|webp)$/i.test(n||'');
+
+/* ================== КЭШ КАТАЛОГА (один список на все вкладки) ================== */
+let PRODUCTS = null;
+async function getProducts(force){
+  if(PRODUCTS && !force) return PRODUCTS;
+  const j = await api('list','products',{});
+  PRODUCTS = j.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
+  return PRODUCTS;
+}
 
 /* ================== ВКЛАДКИ ================== */
 document.querySelectorAll('nav button').forEach(b=>{
   b.onclick = ()=>{
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active', x===b));
     document.querySelectorAll('section').forEach(s=>s.classList.toggle('active', s.id==='tab-'+b.dataset.tab));
-    if(b.dataset.tab==='spec') fillSpecProducts();
+    if(b.dataset.tab==='spec'){ fillSpecProducts(); renderSpecMulti(); }
     if(b.dataset.tab==='catalog') loadCatalog();
     if(b.dataset.tab==='rates') loadRates();
     if(b.dataset.tab==='calc') fillCalcProducts();
     if(b.dataset.tab==='picks'){ renderSelection(); loadHistory(); }
+    if(b.dataset.tab==='archive') renderArchive();
   };
 });
-document.querySelector('nav button[data-tab="spec"]').classList.add('active');
-document.getElementById('tab-spec').classList.add('active');
+document.querySelector('nav button[data-tab="picks"]').classList.add('active');
+document.getElementById('tab-picks').classList.add('active');
 
-/* ================== СПЕЦИФИКАЦИЯ (параметры подбора товара) ================== */
-// Базовый набор параметров спецификации — можно менять: добавлять/удалять строки,
-// значения сохраняются за товаром (лист specs, ключ product_id).
+/* ================== ПОДБОР: черновик, позиции, история ================== */
+const selection = [];
+const draftKey = ()=> 'cg_draft_' + (CTX.deal || 'local');
+function saveDraft(){
+  try{
+    localStorage.setItem(draftKey(), JSON.stringify(selection));
+    const b = document.getElementById('draftBadge');
+    if(b){ b.style.display = selection.length ? 'inline-block' : 'none'; }
+  }catch(e){}
+}
+function restoreDraft(){
+  try{
+    const d = JSON.parse(localStorage.getItem(draftKey())||'[]');
+    selection.length = 0;
+    if(Array.isArray(d)) d.forEach(x=>selection.push(x));
+  }catch(e){}
+  renderSelection();
+}
+
+// Быстрое добавление из каталога: поиск + кнопка «в подбор» с количеством
+let qaTimer = null;
+document.getElementById('qaSearch').addEventListener('input', e=>{
+  clearTimeout(qaTimer);
+  qaTimer = setTimeout(()=>renderQa(e.target.value), 250);
+});
+async function renderQa(q){
+  const box = document.getElementById('qaResults');
+  q = (q||'').trim().toLowerCase();
+  if(q.length < 2){ box.innerHTML=''; return; }
+  try{
+    const prods = await getProducts();
+    const found = prods.filter(p=>(String(p.name)+' '+String(p.factory)+' '+String(p.article)).toLowerCase().includes(q)).slice(0,8);
+    box.innerHTML = found.map(p=>{
+      const img = p.photo ? `<img class="thumb" src="${esc(p.photo)}">` : '';
+      return `<div class="sel-card">${img}<div class="grow">
+        <b>${esc(p.name)}</b> <span class="pill">${esc(p.factory)}</span> <span class="pill">${esc(p.article)}</span><br>
+        <span class="note">${esc(p.price)} ${esc(p.currency)} · вес ${esc(p.weight)} кг</span></div>
+        <input type="number" min="1" value="1" style="width:64px" id="qaQty_${esc(p.id)}">
+        <button class="btn" onclick="quickAdd('${esc(p.id)}')">＋ в подбор</button></div>`;
+    }).join('') || '<p class="note">Не найдено</p>';
+  }catch(e){ box.innerHTML = '<p class="note">'+esc(e.message)+'</p>'; }
+}
+window.quickAdd = async function(id){
+  const prods = await getProducts();
+  const p = prods.find(x=>String(x.id)===String(id));
+  if(!p) return;
+  const qty = +document.getElementById('qaQty_'+CSS.escape(id)).value || 1;
+  if(!p.price){ msg('У товара нет цены — добавьте через калькулятор', false); return; }
+  const today = new Date().toISOString().slice(0,10);
+  let rate = null;
+  try{ rate = await rateFor(p.currency||'CNY', today); }catch(e){}
+  if(!rate){ msg('Нет курса '+(p.currency||'CNY')+' на '+today+' — задайте во вкладке «Курсы» или добавьте через калькулятор', false); return; }
+  const commPct = DEFAULT_COMMISSION_PCT;
+  const delivery = document.getElementById('dType').value;
+  const calc = {
+    delivery, price:+p.price||0, rate:+rate.rate, qty, weight:+p.weight||0,
+    commPct, logPerKg:0, dutyPct:+p.duty||0, vatPct:+p.vat||22,
+    broker:0, fee:0, cargoPerKg:0
+  };
+  const r = calcTotal(calc);
+  selection.push({
+    product_id:p.id, name:`${p.factory} · ${p.article} · ${p.name}`, qty,
+    cost:r.cost, salePrice:r.cost/qty, total:r.cost,
+    rate:calc.rate, rateDate:rate.date, calcDate:today, delivery, commPct,
+    goodsRub:r.goodsRub, commRub:r.commission, logistics:r.logistics,
+    dutyRub:r.duty, vatRub:r.vat,
+    tnved:p.tnved||'', dutyPct:calc.dutyPct, vatPct:calc.vatPct,
+    link:p.link||'', photo:p.photo||''
+  });
+  document.getElementById('qaResults').innerHTML='';
+  document.getElementById('qaSearch').value='';
+  renderSelection();
+  msg('Добавлено: '+p.name+' × '+qty+' (логистику и наценку можно уточнить через калькулятор)');
+};
+
+function renderSelection(){
+  document.getElementById('selCards').innerHTML = selection.map((it,i)=>{
+    const img = it.photo ? `<img class="thumb" src="${esc(it.photo)}" onclick="window.open('${esc(it.photo)}','_blank')">` : '';
+    const link = it.link ? ` <a href="${esc(it.link)}" target="_blank">ссылка на товар</a>` : '';
+    return `<div class="sel-card">${img}<div class="grow">
+      <b>${esc(it.name)}</b>${link}<br>
+      <span class="note">${esc(it.qty)} шт × ${fmt(it.salePrice)} ₽ = <b>${fmt(it.total)} ₽</b> · курс ${esc(it.rate)} от ${esc(it.rateDate)} · расчёт ${esc(it.calcDate)} · ${it.delivery==='cargo'?'карго':'белая'}</span></div>
+      <button class="del" onclick="delSelItem(${i})">✕</button></div>`;
+  }).join('') || '<p class="note">Подбор пуст — добавьте позиции быстрым поиском выше или из калькулятора</p>';
+  document.getElementById('selTotal').textContent = fmt(selection.reduce((s,x)=>s+x.total,0));
+  saveDraft();
+}
+window.delSelItem = function(i){ selection.splice(i,1); renderSelection(); };
+document.getElementById('selClear').onclick = ()=>{
+  if(!selection.length) return;
+  if(confirm('Очистить текущий подбор? Черновик будет удалён.')){
+    selection.length=0; localStorage.removeItem(draftKey()); renderSelection();
+  }
+};
+document.getElementById('selSave').onclick = async ()=>{
+  if(!selection.length) return msg('Подбор пуст', false);
+  if(!CTX.deal) return msg('Нет deal_id — подбор не привяжется к клиенту', false);
+  try{
+    const j = await api('add_selection','selections',{
+      selection:{deal_id:CTX.deal, client_name:CTX.name, created_at:new Date().toISOString(),
+        calc_date:new Date().toISOString().slice(0,10), delivery:document.getElementById('dType').value,
+        items_json:JSON.stringify(selection), total_rub:selection.reduce((s,x)=>s+x.total,0)},
+      items: selection.map(it=>({product_id:it.product_id, name:it.name, qty:it.qty,
+        price_rub:it.salePrice, calc_date:it.calcDate, link:it.link||'', photo:it.photo||''}))
+    });
+    localStorage.removeItem(draftKey());
+    msg('Подбор сохранён (id '+j.id+')'); loadHistory();
+  }catch(e){ msg(e.message, false); }
+};
+
+async function loadHistory(){
+  try{
+    const j = await api('list','selections',{});
+    const live = j.rows.filter(s=>s.client_name && s.client_name!=='__deleted__');
+    live.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+    loadHistory._all = live;
+    renderHistory();
+  }catch(e){ msg('История: '+e.message, false); }
+}
+function renderHistory(){
+  const onlyClient = document.getElementById('histOnlyClient').checked;
+  const q = (document.getElementById('histFilter').value||'').trim().toLowerCase();
+  const rows = (loadHistory._all||[]).filter(s=>{
+    if(onlyClient && CTX.name)
+      return String(s.client_name||'').toLowerCase().includes(CTX.name.toLowerCase());
+    if(!q) return true;
+    return String(s.client_name||'').toLowerCase().includes(q);
+  });
+  document.getElementById('selHistory').innerHTML = rows.map(s=>{
+    let n=0; try{ n = JSON.parse(s.items_json).length; }catch(e){}
+    const src = s.source==='archive-import' ? ' <span class="pill">архив</span>' : '';
+    return `<tr><td>${esc((s.created_at||'').slice(0,16).replace('T',' '))}</td><td>${esc(s.client_name)}${src}</td>
+      <td>${s.delivery==='cargo'?'карго':(s.delivery?'белая':'—')}</td><td class="num">${n}</td><td class="num">${fmt(s.total_rub)}</td>
+      <td><button class="ghost" onclick="selView('${esc(s.id)}')">смотреть</button>
+          <button class="ghost" onclick="kpFromHistory('${esc(s.id)}')">→ КП</button></td></tr>
+      <tr><td colspan="6" style="padding:0;border:0"><div class="histItems" id="hi_${esc(s.id)}"></div></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="note">Ничего не найдено</td></tr>';
+  loadHistory._rows = rows;
+}
+document.getElementById('histFilter').addEventListener('input', ()=>{ document.getElementById('histOnlyClient').dataset.touched='1'; document.getElementById('histOnlyClient').checked=false; renderHistory(); });
+document.getElementById('histOnlyClient').addEventListener('change', function(){ this.dataset.touched='1'; renderHistory(); });
+document.getElementById('histAll').onclick = ()=>{ document.getElementById('histFilter').value=''; const hc=document.getElementById('histOnlyClient'); hc.checked=false; hc.dataset.touched='1'; renderHistory(); };
+
+// просмотр содержимого подбора — раскрывается прямо в таблице, с фото и ссылками
+window.selView = id=>{
+  const box = document.getElementById('hi_'+CSS.escape(id));
+  if(!box) return;
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  const s = (loadHistory._all||[]).find(r=>String(r.id)===id);
+  if(!s) return;
+  let items=[]; try{ items = JSON.parse(s.items_json); }catch(e){}
+  box.innerHTML = items.map(it=>{
+    if(it.note) return `<div style="padding:4px 0">${esc(it.note)}</div>`;
+    const img = it.photo ? `<img class="thumb" src="${esc(it.photo)}"> ` : '';
+    const link = it.link ? ` <a href="${esc(it.link)}" target="_blank">ссылка</a>` : '';
+    return `<div style="padding:4px 0">${img}• ${esc(it.name||'')}${link} — ${esc(it.qty||'')} шт × ${fmt(it.salePrice||0)} ₽</div>`;
+  }).join('') || '<span class="note">пусто</span>';
+  box.style.display='block';
+};
+if(CTX.name){ document.getElementById('histFilter').value = CTX.name; }
+
+/* ================== КАТАЛОГ ================== */
+const PRODUCT_FIELDS = ['factory','article','name','link','price','currency','weight','tnved','duty','vat','price_date','photo','notes'];
+const FIELD_LABELS = {factory:'Фабрика',article:'Артикул',name:'Наименование',link:'Ссылка на товар/фабрику',price:'Цена',currency:'Валюта',
+  weight:'Вес',tnved:'Код ТН ВЭД',duty:'Пошлина %',vat:'НДС %',price_date:'Дата цены',photo:'Фото (URL)',notes:'Заметки','':'— не импортировать —'};
+let impRows = null;
+
+async function loadCatalog(){
+  try{
+    const [prods, picks] = await Promise.all([getProducts(true), api('list','selection_items',{})]);
+    const byProd = {};
+    picks.rows.forEach(it=>{
+      if(!it.product_id) return;
+      (byProd[it.product_id] = byProd[it.product_id] || []).push(it);
+    });
+    loadCatalog._picks = byProd;
+    loadCatalog._rows = prods;
+    renderCatalog();
+  }catch(e){ msg('Каталог: '+e.message, false); }
+}
+function renderCatalog(){
+  const rows = loadCatalog._rows || [];
+  const byProd = loadCatalog._picks || {};
+  const q = (document.getElementById('catSearch').value||'').trim().toLowerCase();
+  const audit = document.getElementById('catAuditFilter').value;
+
+  // сводка полноты каталога
+  const noPhoto = rows.filter(p=>!p.photo).length;
+  const noPrice = rows.filter(p=>!p.price).length;
+  const noLink  = rows.filter(p=>!p.link).length;
+  document.getElementById('catAudit').innerHTML =
+    `<span>Всего товаров: <b>${rows.length}</b></span>`+
+    `<span>без фото: <b>${noPhoto}</b></span>`+
+    `<span>без цены: <b>${noPrice}</b></span>`+
+    `<span>без ссылки: <b>${noLink}</b></span>`;
+
+  const shown = rows.filter(p=>{
+    if(audit==='nophoto' && p.photo) return false;
+    if(audit==='noprice' && p.price) return false;
+    if(audit==='nolink' && p.link) return false;
+    if(audit==='incomplete' && p.photo && p.price && p.link) return false;
+    if(q && !(String(p.name)+' '+String(p.factory)+' '+String(p.article)).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  document.getElementById('catList').innerHTML = shown.map(p=>{
+    const used = byProd[p.id]||[];
+    const usedHtml = used.length
+      ? `<div class="note">Подбирали: ${used.map(u=>`${esc(u.client_name||u.deal_id)} (${String(u.calc_date||'').slice(0,10)}, ${esc(u.qty)} шт)`).join('; ')}</div>` : '';
+    const img = p.photo
+      ? `<img src="${esc(p.photo)}" onclick="window.open('${esc(p.photo)}','_blank')" title="Открыть фото">`
+      : '<div class="ph">нет фото</div>';
+    const gaps = [!p.photo&&'<span class="pill warn">нет фото</span>', !p.price&&'<span class="pill warn">нет цены</span>',
+      !p.link&&'<span class="pill warn">нет ссылки</span>'].filter(Boolean).join('');
+    const linkHtml = p.link ? ` <a href="${esc(p.link)}" target="_blank">товар у фабрики ↗</a>` : '';
+    return `<div class="card">${img}<div class="body">
+      <div class="t">${esc(p.name)} <span class="pill">${esc(p.factory)}</span> <span class="pill">${esc(p.article)}</span>${gaps}</div>
+      <div><b>${esc(p.price)} ${esc(p.currency)}</b> · вес ${esc(p.weight)} кг · ТН ВЭД ${esc(p.tnved||'—')} · пошлина ${esc(p.duty||'—')}% · дата цены: ${esc(p.price_date?String(p.price_date).slice(0,10):'—')}${linkHtml}</div>
+      ${p.notes?`<div class="note">${esc(p.notes)}</div>`:''}${usedHtml}
+      <div style="margin-top:4px">
+        <button class="ghost" onclick="toCalc('${esc(p.id)}')">→ в расчёт</button>
+        <button class="ghost" onclick="toSpec('${esc(p.id)}')">спецификация</button>
+      </div></div></div>`;
+  }).join('') || '<p class="note">Каталог пуст или ничего не найдено</p>';
+}
+document.getElementById('catSearch').addEventListener('input', renderCatalog);
+document.getElementById('catAuditFilter').addEventListener('change', renderCatalog);
+document.getElementById('catReload').onclick = loadCatalog;
+window.toSpec = id=>{
+  document.querySelector('nav button[data-tab="spec"]').click();
+  fillSpecProducts().then(()=>{
+    document.getElementById('specProduct').value = id;
+    document.getElementById('specProduct').dispatchEvent(new Event('change'));
+  });
+};
+
+document.getElementById('prodNewBtn').onclick = ()=>{
+  const f = document.getElementById('prodForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+};
+document.getElementById('pPhotoFile').addEventListener('change', async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const st = document.getElementById('pPhotoStatus');
+  st.textContent = 'загрузка…';
+  try{
+    const buf = await f.arrayBuffer();
+    let bin=''; new Uint8Array(buf).forEach(b=>bin+=String.fromCharCode(b));
+    const j = await api('upload_photo','products',{data:{
+      base64: btoa(bin), mime: f.type||'image/jpeg',
+      name: (document.getElementById('pArticle').value||'photo') + '.jpg'}});
+    document.getElementById('pPhoto').value = j.url;
+    st.textContent = 'загружено на Диск';
+  }catch(err){ st.textContent = 'ошибка загрузки: '+err.message; }
+});
+document.getElementById('prodSave').onclick = async ()=>{
+  const v = id=>document.getElementById(id).value.trim();
+  const rec = {factory:v('pFactory'), article:v('pArticle'), name:v('pName'), link:v('pLink'), price:v('pPrice'),
+    currency:document.getElementById('pCurrency').value, weight:v('pWeight'), tnved:v('pTnved'),
+    duty:v('pDuty'), vat:v('pVat'), price_date:v('pPriceDate'), photo:v('pPhoto'), notes:v('pNotes'),
+    updated_at:new Date().toISOString()};
+  if(!rec.factory && !rec.article) return msg('Заполните фабрику и артикул', false);
+  try{
+    await api('upsert','products',{keys:['factory','article'], data:rec});
+    PRODUCTS = null;
+    msg('Товар сохранён'); document.getElementById('prodForm').style.display='none'; loadCatalog();
+  }catch(e){ msg(e.message, false); }
+};
+
+document.getElementById('impParse').onclick = async ()=>{
+  const f = document.getElementById('impFile').files[0];
+  if(!f) return msg('Выберите файл', false);
+  try{
+    const wb = XLSX.read(await f.arrayBuffer());
+    impRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    if(!impRows.length) return msg('Файл пуст', false);
+    const cols = Object.keys(impRows[0]);
+    const guess = {фабрика:'factory',производитель:'factory',артикул:'article',арт:'article',
+      наименование:'name',название:'name',товар:'name',цена:'price',стоимость:'price',валюта:'currency',
+      вес:'weight','тн вэд':'tnved','код':'tnved',пошлина:'duty',ндс:'vat',дата:'price_date',фото:'photo',
+      ссылка:'link',url:'link',линк:'link','ссылка на товар':'link'};
+    document.querySelector('#mapTable tbody').innerHTML = cols.map(c=>{
+      const g = guess[String(c).toLowerCase().trim()] || '';
+      return `<tr><td>${esc(c)}</td><td><select data-col="${esc(c)}">` +
+        ['',...PRODUCT_FIELDS].map(k=>`<option value="${k}" ${k===g?'selected':''}>${FIELD_LABELS[k]}</option>`).join('') +
+        `</select></td></tr>`;
+    }).join('');
+    document.getElementById('mapBlock').style.display='block';
+    msg('Прочитано строк: '+impRows.length);
+  }catch(e){ msg('Не удалось прочитать файл: '+e.message, false); }
+};
+document.getElementById('impRun').onclick = async ()=>{
+  if(!impRows) return;
+  const map = {};
+  document.querySelectorAll('#mapTable select').forEach(s=>{ if(s.value) map[s.dataset.col]=s.value; });
+  if(!Object.values(map).includes('factory') || !Object.values(map).includes('article'))
+    return msg('Сопоставьте как минимум «Фабрика» и «Артикул»', false);
+  let ok=0, fail=0;
+  for(const row of impRows){
+    const rec = {};
+    for(const [col,field] of Object.entries(map)) rec[field] = row[col];
+    if(!rec.factory && !rec.article) continue;
+    rec.updated_at = new Date().toISOString();
+    try{ await api('upsert','products',{keys:['factory','article'], data:rec}); ok++; }
+    catch(e){ fail++; }
+  }
+  PRODUCTS = null;
+  msg(`Импорт: обновлено/создано ${ok}, ошибок ${fail}`, fail===0);
+  impRows=null; document.getElementById('mapBlock').style.display='none'; loadCatalog();
+};
+
+/* ================== КУРСЫ ================== */
+async function loadRates(){
+  try{
+    const j = await api('list','rates',{});
+    j.rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    document.getElementById('rateList').innerHTML = j.rows.slice(0,60).map(r=>
+      `<tr><td>${esc(r.currency)}</td><td class="num">${esc(r.rate)}</td><td>${esc(r.date)}</td></tr>`).join('')
+      || '<tr><td colspan="3" class="note">Курсов нет</td></tr>';
+  }catch(e){ msg('Курсы: '+e.message, false); }
+}
+document.getElementById('rateDate').valueAsDate = new Date();
+document.getElementById('rateAdd').onclick = async ()=>{
+  const v = +document.getElementById('rateVal').value;
+  if(!v) return msg('Введите курс', false);
+  try{
+    await api('add','rates',{data:{currency:document.getElementById('rateCur').value, rate:v,
+      date:document.getElementById('rateDate').value}});
+    document.getElementById('rateVal').value=''; loadRates(); msg('Курс сохранён');
+  }catch(e){ msg(e.message, false); }
+};
+async function rateFor(currency, dateStr){
+  const j = await api('list','rates',{where:{currency}});
+  const rows = j.rows.filter(r=>String(r.date)<=dateStr).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return rows[0] || null;
+}
+
+/* ================== КАЛЬКУЛЯТОР ================== */
+function calcAssumptions(delivery){
+  return delivery==='cargo'
+    ? 'Карго: ставка ₽/кг включает логистику и растаможку, брокера/пошлины/НДС нет. Комиссия % от товара. Без сертификации и доставки по РФ.'
+    : 'Белая: база = товар (₽) + логистика; пошлина и НДС от базы; брокер и там. сбор — фикс на партию; комиссия % от товара. Без сертификации и доставки по РФ.';
+}
+function calcTotal({price, rate, qty, weight, commPct, logPerKg, dutyPct, vatPct, broker, fee, cargoPerKg, delivery}){
+  const goodsRub  = price * rate * qty;
+  const commission= goodsRub * commPct/100;
+  if(delivery==='cargo'){
+    const cargoCost = weight * qty * cargoPerKg;
+    const cost = goodsRub + commission + cargoCost;
+    return {delivery, goodsRub, commission, logistics:cargoCost, customsBase:0, duty:0, vat:0, broker:0, fee:0, cost};
+  }
+  const logistics = weight * qty * logPerKg;
+  const customsBase = goodsRub + logistics;
+  const duty = customsBase * dutyPct/100;
+  const vat  = (customsBase + duty) * vatPct/100;
+  const cost = customsBase + duty + vat + (broker||0) + (fee||0) + commission;
+  return {delivery, goodsRub, commission, logistics, customsBase, duty, vat, broker:broker||0, fee:fee||0, cost};
+}
+document.getElementById('calcDate').valueAsDate = new Date();
+document.getElementById('calcAssump').textContent = calcAssumptions('white');
+document.getElementById('dType').addEventListener('change', e=>{
+  const cargo = e.target.value==='cargo';
+  document.querySelectorAll('.white-only').forEach(el=>el.style.display=cargo?'none':'flex');
+  document.querySelectorAll('.cargo-only').forEach(el=>el.style.display=cargo?'flex':'none');
+  document.getElementById('calcAssump').textContent = calcAssumptions(e.target.value);
+  document.getElementById('selDelivery').textContent = cargo?'карго':'белая';
+});
+
+async function fillCalcProducts(){
+  const sel = document.getElementById('calcProduct');
+  try{
+    const live = await getProducts();
+    sel.innerHTML = '<option value="">— вручную —</option>' + live.map(p=>
+      `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.factory)} · ${esc(p.article)}</option>`).join('');
+  }catch(e){ msg('Каталог: '+e.message, false); }
+}
+window.toCalc = function(id){
+  document.querySelector('nav button[data-tab="calc"]').click();
+  fillCalcProducts().then(()=>{
+    document.getElementById('calcProduct').value = id;
+    document.getElementById('calcProduct').dispatchEvent(new Event('change'));
+  });
+};
+document.getElementById('calcProduct').addEventListener('change', async e=>{
+  const live = await getProducts();
+  const p = live.find(r=>String(r.id)===e.target.value);
+  const card = document.getElementById('calcProdCard');
+  if(!p){ card.style.display='none'; return; }
+  document.getElementById('cPrice').value = p.price||'';
+  document.getElementById('cCur').value = p.currency||'CNY';
+  document.getElementById('cWeight').value = p.weight||'';
+  document.getElementById('cDuty').value = p.duty||'';
+  if(p.vat) document.getElementById('cVat').value = p.vat;
+  const img = p.photo ? `<img class="thumb" src="${esc(p.photo)}">` : '';
+  const link = p.link ? ` <a href="${esc(p.link)}" target="_blank">товар у фабрики ↗</a>` : '';
+  card.innerHTML = `<div class="sel-card">${img}<div class="grow"><b>${esc(p.name)}</b>${link}<br>
+    <span class="note">${esc(p.price)} ${esc(p.currency)} · вес ${esc(p.weight)} кг · ТН ВЭД ${esc(p.tnved||'—')}</span></div></div>`;
+  card.style.display='block';
+  await fillRate();
+});
+document.getElementById('calcDate').addEventListener('change', fillRate);
+document.getElementById('cCur').addEventListener('change', fillRate);
+async function fillRate(){
+  const cur = document.getElementById('cCur').value;
+  const d = document.getElementById('calcDate').value || new Date().toISOString().slice(0,10);
+  try{
+    const r = await rateFor(cur, d);
+    document.getElementById('cRate').value = r ? r.rate : '';
+    document.getElementById('cRateDate').value = r ? r.date : 'нет курса — введите вручную';
+  }catch(e){ msg(e.message, false); }
+}
+let lastCalc = null;
+document.getElementById('calcRun').onclick = async ()=>{
+  const v = id=>+document.getElementById(id).value||0;
+  const delivery = document.getElementById('dType').value;
+  lastCalc = {
+    delivery, price: v('cPrice'), rate: v('cRate'), qty: v('cQty')||1, weight: v('cWeight'),
+    commPct: v('cComm')||DEFAULT_COMMISSION_PCT, logPerKg: v('cLog'), dutyPct: v('cDuty'),
+    vatPct: v('cVat'), broker: v('cBroker'), fee: v('cFee'), cargoPerKg: v('cCargo')
+  };
+  if(!lastCalc.price || !lastCalc.rate) return msg('Заполните цену и курс', false);
+  const r = calcTotal(lastCalc);
+  lastCalc.result = r;
+  const rows = [['Товар, ₽',r.goodsRub],[`Комиссия ${lastCalc.commPct}%, ₽`,r.commission]];
+  if(delivery==='cargo') rows.push(['Карго (логистика+растаможка), ₽', r.logistics]);
+  else rows.push(['Логистика, ₽',r.logistics],['Таможенная база, ₽',r.customsBase],
+    ['Пошлина, ₽',r.duty],['НДС, ₽',r.vat],['Брокер, ₽',r.broker],['Таможенный сбор, ₽',r.fee]);
+  rows.push(['Себестоимость партии, ₽', r.cost]);
+  document.getElementById('calcOut').innerHTML = rows.map(([k,x],i)=>
+    `<tr${i===rows.length-1?' style="font-weight:700"':''}><td>${k}</td><td class="num">${fmt(x)}</td></tr>`).join('');
+  const sel = document.getElementById('calcProduct');
+  const live = await getProducts();
+  const p = sel.value ? live.find(x=>String(x.id)===sel.value) : null;
+  lastCalc.productId = p ? p.id : '';
+  lastCalc.name = p ? `${p.factory} · ${p.article} · ${p.name}` : 'Позиция (ручной ввод)';
+  lastCalc.rateDate = document.getElementById('cRateDate').value;
+  lastCalc.calcDate = document.getElementById('calcDate').value;
+  lastCalc.tnved = p ? (p.tnved||'') : '';
+  lastCalc.link = p ? (p.link||'') : '';
+  lastCalc.photo = p ? (p.photo||'') : '';
+  document.getElementById('calcAdd').disabled = false;
+};
+document.getElementById('calcAdd').onclick = ()=>{
+  if(!lastCalc) return;
+  const markupPct = +document.getElementById('cMarkup').value||0;
+  const saleTotal = lastCalc.result.cost * (1 + markupPct/100);
+  selection.push({
+    product_id: lastCalc.productId, name: lastCalc.name, qty: lastCalc.qty,
+    cost: lastCalc.result.cost, salePrice: saleTotal/lastCalc.qty, total: saleTotal,
+    rate: lastCalc.rate, rateDate: lastCalc.rateDate, calcDate: lastCalc.calcDate,
+    delivery: lastCalc.delivery, commPct: lastCalc.commPct,
+    goodsRub: lastCalc.result.goodsRub, commRub: lastCalc.result.commission,
+    logistics: lastCalc.result.logistics, dutyRub: lastCalc.result.duty,
+    vatRub: lastCalc.result.vat,
+    tnved: lastCalc.tnved||'', dutyPct: lastCalc.dutyPct, vatPct: lastCalc.vatPct,
+    link: lastCalc.link||'', photo: lastCalc.photo||''
+  });
+  renderSelection();
+  document.querySelector('nav button[data-tab="picks"]').click();
+  msg('Позиция добавлена в подбор');
+};
+
+/* ================== СПЕЦИФИКАЦИЯ ================== */
 const SPEC_DEFAULTS = [
   ['Материал',''],['Размеры / габариты',''],['Цвет',''],['Комплектация',''],
   ['Мин. партия (MOQ)',''],['Упаковка',''],['Сертификация',''],['Срок производства',''],
@@ -300,11 +844,9 @@ let specProductId = '';
 async function fillSpecProducts(){
   const sel = document.getElementById('specProduct');
   try{
-    const j = await api('list','products',{});
-    const live = j.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
+    const live = await getProducts();
     sel.innerHTML = '<option value="">— выберите товар —</option>' + live.map(p=>
       `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.factory)} · ${esc(p.article)}</option>`).join('');
-    fillSpecProducts._rows = live;
   }catch(e){ msg('Каталог: '+e.message, false); }
 }
 document.getElementById('specProduct').addEventListener('change', async e=>{
@@ -318,6 +860,14 @@ document.getElementById('specProduct').addEventListener('change', async e=>{
     if(j.rows[0] && j.rows[0].params_json){
       const saved = JSON.parse(j.rows[0].params_json);
       if(Array.isArray(saved) && saved.length) params = saved;
+    }
+  }catch(err){}
+  // подставляем ссылку товара автоматически, если параметр пуст
+  try{
+    const live = await getProducts();
+    const p = live.find(r=>String(r.id)===specProductId);
+    if(p && p.link){
+      params = params.map(([k,v])=> (k==='Ссылка на товар' && !v) ? [k, p.link] : [k,v]);
     }
   }catch(err){}
   renderSpecRows(params);
@@ -352,15 +902,107 @@ document.getElementById('specNew').onclick = ()=>{
   document.querySelector('nav button[data-tab="catalog"]').click();
   document.getElementById('prodNewBtn').click();
 };
+
+// ---- мульти-спецификация: отмечаем несколько товаров, собираем один документ ----
+async function getSpecParams(productId){
+  try{
+    const j = await api('list','specs',{where:{product_id:productId}});
+    if(j.rows[0] && j.rows[0].params_json){
+      const saved = JSON.parse(j.rows[0].params_json);
+      if(Array.isArray(saved) && saved.length) return saved;
+    }
+  }catch(e){}
+  return SPEC_DEFAULTS.map(r=>r.slice());
+}
+async function renderSpecMulti(){
+  const live = await getProducts();
+  const q = (document.getElementById('specMultiSearch').value||'').toLowerCase();
+  const shown = live.filter(p=>!q || (String(p.name)+' '+String(p.factory)+' '+String(p.article)).toLowerCase().includes(q));
+  document.getElementById('specMultiList').innerHTML = shown.map(p=>
+    `<label class="chk"><input type="checkbox" class="specMultiChk" value="${esc(p.id)}">
+     ${esc(p.name)} <span class="pill">${esc(p.factory)}</span> <span class="pill">${esc(p.article)}</span>
+     <span class="note">${esc(p.price)} ${esc(p.currency)}</span></label>`).join('')
+    || '<p class="note">Каталог пуст</p>';
+}
+document.getElementById('specMultiSearch').addEventListener('input', renderSpecMulti);
+async function buildMultiSpec(){
+  const ids = [...document.querySelectorAll('.specMultiChk:checked')].map(c=>c.value);
+  if(!ids.length){ msg('Отметьте хотя бы один товар', false); return null; }
+  const live = await getProducts();
+  const blocks = [];
+  for(const id of ids){
+    const p = live.find(r=>String(r.id)===id);
+    if(!p) continue;
+    const params = await getSpecParams(p.id);
+    blocks.push({p, params});
+  }
+  return blocks;
+}
+function multiSpecText(blocks){
+  const L = ['СПЕЦИФИКАЦИЯ ТОВАРОВ', 'Клиент: ' + (CTX.name||'—'), 'Дата: ' + new Date().toLocaleDateString('ru-RU'), ''];
+  blocks.forEach((b,i)=>{
+    const p = b.p;
+    L.push(`── Товар ${i+1}: ${p.name}`,
+      `Фабрика: ${p.factory} · артикул: ${p.article}`,
+      `Цена фабрики: ${p.price} ${p.currency} (дата цены: ${p.price_date?String(p.price_date).slice(0,10):'—'})`);
+    if(p.tnved) L.push(`Код ТН ВЭД: ${p.tnved}`);
+    if(p.link) L.push(`Ссылка: ${p.link}`);
+    b.params.forEach(([k,v])=>{ if(k||v) L.push(`${k}: ${v}`); });
+    L.push('');
+  });
+  return L.join('\n');
+}
+document.getElementById('specMultiBuild').onclick = async ()=>{
+  const blocks = await buildMultiSpec();
+  if(!blocks) return;
+  const out = document.getElementById('specMultiOut');
+  out.textContent = multiSpecText(blocks);
+  out.style.display='block';
+  out._blocks = blocks;
+  msg('Спецификация сформирована по '+blocks.length+' товарам');
+};
+document.getElementById('specMultiCopy').onclick = async ()=>{
+  const t = document.getElementById('specMultiOut').textContent;
+  if(t){ await navigator.clipboard.writeText(t); msg('Скопировано'); }
+};
+document.getElementById('specMultiDocx').onclick = ()=>{
+  const blocks = document.getElementById('specMultiOut')._blocks;
+  if(!blocks) return msg('Сначала сформируйте спецификацию', false);
+  const body = blocks.map((b,i)=>{
+    const p = b.p;
+    const rows = b.params.filter(([k,v])=>k||v).map(([k,v])=>
+      `<tr><td style="border:1px solid #999;padding:6px;width:220px">${esc(k)}</td><td style="border:1px solid #999;padding:6px">${esc(v)}</td></tr>`).join('');
+    const photoHtml = p.photo ? `<p><img src="${esc(p.photo)}" style="max-width:280px"></p>` : '';
+    return `<h2 style="font-size:13pt">Товар ${i+1}: ${esc(p.name)}</h2>
+      <p><b>Фабрика:</b> ${esc(p.factory)} · <b>артикул:</b> ${esc(p.article)}<br>
+      <b>Цена фабрики:</b> ${esc(p.price)} ${esc(p.currency)} (дата цены: ${esc(p.price_date?String(p.price_date).slice(0,10):'—')})<br>
+      ${p.tnved?`<b>Код ТН ВЭД:</b> ${esc(p.tnved)}<br>`:''}${p.link?`<b>Ссылка:</b> ${esc(p.link)}`:''}</p>
+      ${photoHtml}<table style="border-collapse:collapse">${rows}</table>`;
+  }).join('');
+  const htmlDoc = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+    <style>body{font:12pt 'Times New Roman'} h1{font-size:16pt}</style></head><body>
+    <h1>СПЕЦИФИКАЦИЯ ТОВАРОВ</h1>
+    <p><b>Клиент:</b> ${esc(CTX.name||'—')} · <b>дата:</b> ${new Date().toLocaleDateString('ru-RU')}</p>
+    ${body}</body></html>`;
+  const blob = new Blob(['\ufeff'+htmlDoc], {type:'application/msword'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Спецификация_' + (CTX.name||'клиент').replace(/[^\wа-яё]+/gi,'_').slice(0,40) + '.doc';
+  a.click(); URL.revokeObjectURL(a.href);
+  msg('Файл спецификации скачан (.doc — открывается в Word)');
+};
+
+// однотоварный бланк (старый режим — оставлен для совместимости)
 document.getElementById('specBuild').onclick = async ()=>{
   if(!specProductId) return msg('Выберите товар', false);
-  const p = (fillSpecProducts._rows||[]).find(r=>String(r.id)===specProductId);
+  const live = await getProducts();
+  const p = live.find(r=>String(r.id)===specProductId);
   const params = collectSpec();
   const L = [];
   L.push('СПЕЦИФИКАЦИЯ ТОВАРА');
   if(p){ L.push(`Товар: ${p.name}`, `Фабрика: ${p.factory} · артикул: ${p.article}`,
-    `Цена фабрики: ${p.price} ${p.currency} (дата цены: ${p.price_date||'—'})`,
-    p.tnved ? `Код ТН ВЭД: ${p.tnved}` : '', p.photo ? `Фото: ${p.photo}` : ''); }
+    `Цена фабрики: ${p.price} ${p.currency} (дата цены: ${p.price_date?String(p.price_date).slice(0,10):'—'})`,
+    p.tnved ? `Код ТН ВЭД: ${p.tnved}` : '', p.link ? `Ссылка: ${p.link}` : '', p.photo ? `Фото: ${p.photo}` : ''); }
   L.push('');
   params.forEach(([k,v])=>{ if(k||v) L.push(`${k}: ${v}`); });
   L.push('', '— Сформировано ' + new Date().toLocaleDateString('ru-RU'));
@@ -371,9 +1013,9 @@ document.getElementById('specCopy').onclick = async ()=>{
   const t = document.getElementById('specOut').textContent;
   if(t) { await navigator.clipboard.writeText(t); msg('Спецификация скопирована'); }
 };
-// .docx для спецификации: HTML-документ с MIME Word — открывается в Word как документ
-document.getElementById('specDocx').onclick = ()=>{
-  const p = (fillSpecProducts._rows||[]).find(r=>String(r.id)===specProductId);
+document.getElementById('specDocx').onclick = async ()=>{
+  const live = await getProducts();
+  const p = live.find(r=>String(r.id)===specProductId);
   if(!p) return msg('Выберите товар', false);
   const params = collectSpec();
   const rows = params.filter(([k,v])=>k||v).map(([k,v])=>
@@ -383,7 +1025,7 @@ document.getElementById('specDocx').onclick = ()=>{
     <style>body{font:12pt 'Times New Roman'} h1{font-size:16pt} table{border-collapse:collapse}</style></head><body>
     <h1>СПЕЦИФИКАЦИЯ ТОВАРА</h1>
     <p><b>Товар:</b> ${esc(p.name)}<br><b>Фабрика:</b> ${esc(p.factory)} · <b>артикул:</b> ${esc(p.article)}<br>
-    <b>Цена фабрики:</b> ${esc(p.price)} ${esc(p.currency)} (дата цены: ${esc(p.price_date||'—')})<br>
+    <b>Цена фабрики:</b> ${esc(p.price)} ${esc(p.currency)} (дата цены: ${esc(p.price_date?String(p.price_date).slice(0,10):'—')})<br>
     ${p.tnved?`<b>Код ТН ВЭД:</b> ${esc(p.tnved)}<br>`:''}${p.link?`<b>Ссылка:</b> ${esc(p.link)}`:''}</p>
     ${photoHtml}
     <table>${rows}</table>
@@ -396,356 +1038,45 @@ document.getElementById('specDocx').onclick = ()=>{
   msg('Файл спецификации скачан (.doc — открывается в Word)');
 };
 
-/* ================== КАТАЛОГ ================== */
-const PRODUCT_FIELDS = ['factory','article','name','price','currency','weight','tnved','duty','vat','price_date','photo','notes'];
-const FIELD_LABELS = {factory:'Фабрика',article:'Артикул',name:'Наименование',price:'Цена',currency:'Валюта',
-  weight:'Вес',tnved:'Код ТН ВЭД',duty:'Пошлина %',vat:'НДС %',price_date:'Дата цены',photo:'Фото (URL)',notes:'Заметки','':'— не импортировать —'};
-let impRows = null;
-
-async function loadCatalog(){
-  try{
-    const [prods, picks] = await Promise.all([api('list','products',{}), api('list','selection_items',{})]);
-    // индекс: product_id -> клиенты/сделки, которым подбирали
-    const byProd = {};
-    picks.rows.forEach(it=>{
-      if(!it.product_id) return;
-      (byProd[it.product_id] = byProd[it.product_id] || []).push(it);
-    });
-    loadCatalog._picks = byProd;
-    const live = prods.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
-    document.getElementById('catList').innerHTML = live.map(p=>{
-      const used = byProd[p.id]||[];
-      const usedHtml = used.length
-        ? `<div class="note">Подбирали: ${used.map(u=>`${esc(u.client_name||u.deal_id)} (${String(u.calc_date||'').slice(0,10)}, ${esc(u.qty)} шт)`).join('; ')}</div>` : '';
-      const img = p.photo ? `<img src="${esc(p.photo)}" alt="">` : '<div class="ph">нет фото</div>';
-      return `<div class="card">${img}<div class="body">
-        <div class="t">${esc(p.name)} <span class="pill">${esc(p.factory)}</span> <span class="pill">${esc(p.article)}</span></div>
-        <div>${esc(p.price)} ${esc(p.currency)} · вес ${esc(p.weight)} кг · ТН ВЭД ${esc(p.tnved||'—')} · пошлина ${esc(p.duty||'—')}% · дата цены: ${esc(p.price_date||'—')}</div>
-        ${p.notes?`<div class="note">${esc(p.notes)}</div>`:''}${usedHtml}
-        <div style="margin-top:4px">
-          <button class="ghost" onclick="toCalc('${esc(p.id)}')">→ в расчёт</button>
-          <button class="ghost" onclick="toSpec('${esc(p.id)}')">спецификация</button>
-        </div></div></div>`;
-    }).join('') || '<p class="note">Каталог пуст</p>';
-    loadCatalog._rows = live;
-  }catch(e){ msg('Каталог: '+e.message, false); }
+/* ================== АРХИВ КЛИЕНТА ================== */
+function renderArchive(){
+  const q = (document.getElementById('archSearch').value||'').trim().toLowerCase();
+  const data = (typeof CLIENT_FILES !== 'undefined') ? CLIENT_FILES : [];
+  const shown = data.filter(c=>!q ||
+    String(c.name).toLowerCase().includes(q) || String(c.company||'').toLowerCase().includes(q));
+  document.getElementById('archClients').innerHTML = shown.slice(0,30).map((c,i)=>
+    `<button class="ghost" style="margin:2px" data-i="${i}">
+      ${esc(c.name)}${c.company?' ('+esc(c.company)+')':''} · ${c.files.length}</button>`).join('')
+    || '<p class="note">Клиент не найден в архиве</p>';
+  document.getElementById('archClients')._shown = shown.slice(0,30);
 }
-window.toSpec = id=>{
-  document.querySelector('nav button[data-tab="spec"]').click();
-  fillSpecProducts().then(()=>{
-    document.getElementById('specProduct').value = id;
-    document.getElementById('specProduct').dispatchEvent(new Event('change'));
-  });
+document.getElementById('archSearch').addEventListener('input', renderArchive);
+function archOpen(entry){
+  const box = document.getElementById('archFiles');
+  box.innerHTML = `<h3>${esc(entry.name)}${entry.company?' · '+esc(entry.company):''}
+    <a href="${esc(entry.folder)}" target="_blank" style="font-size:12px">открыть папку на Диске ↗</a></h3>
+    <div class="fgrid">` + entry.files.map(f=>{
+      const img = isImg(f.n)
+        ? `<img loading="lazy" src="https://drive.google.com/thumbnail?id=${esc(f.id)}&sz=w300" onclick="window.open('https://drive.google.com/file/d/${esc(f.id)}/view','_blank')">`
+        : '';
+      return `<div class="f">${img}<a class="n" href="https://drive.google.com/file/d/${esc(f.id)}/view" target="_blank" title="${esc(f.n)}">${esc(f.n)}</a></div>`;
+    }).join('') + '</div>';
+}
+window.archOpen = archOpen;
+window.archShowClient = function(name, company){
+  const data = (typeof CLIENT_FILES !== 'undefined') ? CLIENT_FILES : [];
+  const entry = data.find(c=>c.name===name && (c.company||'')===company);
+  if(entry) archOpen(entry);
 };
-document.getElementById('catReload').onclick = loadCatalog;
-
-// ручное добавление товара
-document.getElementById('prodNewBtn').onclick = ()=>{
-  const f = document.getElementById('prodForm');
-  f.style.display = f.style.display==='none' ? 'block' : 'none';
-};
-// загрузка фото на Google Диск через Apps Script (upload_photo), в поле — публичный URL
-document.getElementById('pPhotoFile').addEventListener('change', async e=>{
-  const f = e.target.files[0]; if(!f) return;
-  const st = document.getElementById('pPhotoStatus');
-  st.textContent = 'загрузка…';
-  try{
-    const buf = await f.arrayBuffer();
-    let bin=''; new Uint8Array(buf).forEach(b=>bin+=String.fromCharCode(b));
-    const j = await api('upload_photo','products',{data:{
-      base64: btoa(bin), mime: f.type||'image/jpeg',
-      name: (document.getElementById('pArticle').value||'photo') + '.jpg'}});
-    document.getElementById('pPhoto').value = j.url;
-    st.textContent = 'загружено на Диск';
-  }catch(err){ st.textContent = 'ошибка загрузки: '+err.message; }
+document.getElementById('archClients').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-i]');
+  if(!btn) return;
+  const shown = document.getElementById('archClients')._shown || [];
+  const entry = shown[+btn.dataset.i];
+  if(entry) archOpen(entry);
 });
-document.getElementById('prodSave').onclick = async ()=>{
-  const v = id=>document.getElementById(id).value.trim();
-  const rec = {factory:v('pFactory'), article:v('pArticle'), name:v('pName'), price:v('pPrice'),
-    currency:document.getElementById('pCurrency').value, weight:v('pWeight'), tnved:v('pTnved'),
-    duty:v('pDuty'), vat:v('pVat'), price_date:v('pPriceDate'), photo:v('pPhoto'), notes:v('pNotes'),
-    updated_at:new Date().toISOString()};
-  if(!rec.factory && !rec.article) return msg('Заполните фабрику и артикул', false);
-  try{
-    await api('upsert','products',{keys:['factory','article'], data:rec});
-    msg('Товар сохранён'); document.getElementById('prodForm').style.display='none'; loadCatalog();
-  }catch(e){ msg(e.message, false); }
-};
-
-// импорт архива/прайса
-document.getElementById('impParse').onclick = async ()=>{
-  const f = document.getElementById('impFile').files[0];
-  if(!f) return msg('Выберите файл', false);
-  try{
-    const wb = XLSX.read(await f.arrayBuffer());
-    impRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-    if(!impRows.length) return msg('Файл пуст', false);
-    const cols = Object.keys(impRows[0]);
-    const guess = {фабрика:'factory',производитель:'factory',артикул:'article',арт:'article',
-      наименование:'name',название:'name',товар:'name',цена:'price',стоимость:'price',валюта:'currency',
-      вес:'weight','тн вэд':'tnved','код':'tnved',пошлина:'duty',ндс:'vat',дата:'price_date',фото:'photo',ссылка:'photo'};
-    document.querySelector('#mapTable tbody').innerHTML = cols.map(c=>{
-      const g = guess[String(c).toLowerCase().trim()] || '';
-      return `<tr><td>${esc(c)}</td><td><select data-col="${esc(c)}">` +
-        ['',...PRODUCT_FIELDS].map(k=>`<option value="${k}" ${k===g?'selected':''}>${FIELD_LABELS[k]}</option>`).join('') +
-        `</select></td></tr>`;
-    }).join('');
-    document.getElementById('mapBlock').style.display='block';
-    msg('Прочитано строк: '+impRows.length);
-  }catch(e){ msg('Не удалось прочитать файл: '+e.message, false); }
-};
-document.getElementById('impRun').onclick = async ()=>{
-  if(!impRows) return;
-  const map = {};
-  document.querySelectorAll('#mapTable select').forEach(s=>{ if(s.value) map[s.dataset.col]=s.value; });
-  if(!Object.values(map).includes('factory') || !Object.values(map).includes('article'))
-    return msg('Сопоставьте как минимум «Фабрика» и «Артикул»', false);
-  let ok=0, fail=0;
-  for(const row of impRows){
-    const rec = {};
-    for(const [col,field] of Object.entries(map)) rec[field] = row[col];
-    if(!rec.factory && !rec.article) continue;
-    rec.updated_at = new Date().toISOString();
-    try{ await api('upsert','products',{keys:['factory','article'], data:rec}); ok++; }
-    catch(e){ fail++; }
-  }
-  msg(`Импорт: обновлено/создано ${ok}, ошибок ${fail}`, fail===0);
-  impRows=null; document.getElementById('mapBlock').style.display='none'; loadCatalog();
-};
-
-/* ================== КУРСЫ (только ручной ввод, по датам) ================== */
-async function loadRates(){
-  try{
-    const j = await api('list','rates',{});
-    j.rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-    document.getElementById('rateList').innerHTML = j.rows.slice(0,60).map(r=>
-      `<tr><td>${esc(r.currency)}</td><td class="num">${esc(r.rate)}</td><td>${esc(r.date)}</td></tr>`).join('')
-      || '<tr><td colspan="3" class="note">Курсов нет</td></tr>';
-  }catch(e){ msg('Курсы: '+e.message, false); }
-}
-document.getElementById('rateDate').valueAsDate = new Date();
-document.getElementById('rateAdd').onclick = async ()=>{
-  const v = +document.getElementById('rateVal').value;
-  if(!v) return msg('Введите курс', false);
-  try{
-    await api('add','rates',{data:{currency:document.getElementById('rateCur').value, rate:v,
-      date:document.getElementById('rateDate').value}});
-    document.getElementById('rateVal').value=''; loadRates(); msg('Курс сохранён');
-  }catch(e){ msg(e.message, false); }
-};
-async function rateFor(currency, dateStr){ // последний курс с date <= даты расчёта
-  const j = await api('list','rates',{where:{currency}});
-  const rows = j.rows.filter(r=>String(r.date)<=dateStr).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  return rows[0] || null;
-}
-
-/* ================== КАЛЬКУЛЯТОР ==================
- * ДОПУЩЕНИЯ (оценка, не точная таможенная калькуляция):
- *  БЕЛАЯ доставка:
- *   - комиссия = стоимость товара (₽) × комиссия %  (стандартно 10%, редактируется);
- *   - логистика = ₽/кг × вес × кол-во;
- *   - таможенная база = товар + логистика (упрощение; реально базу определяет брокер);
- *   - пошлина = база × %, НДС = (база + пошлина) × %;
- *   - брокер и таможенный сбор — фиксированные суммы на партию;
- *  КАРГО: единая ставка ₽/кг × вес × кол-во включает логистику и растаможку;
- *   брокера, пошлины и НДС нет; комиссия считается так же.
- *  Не учтены: сертификация, страховка, СВХ, доставка по РФ.
- */
-function calcAssumptions(delivery){
-  return delivery==='cargo'
-    ? 'Карго: ставка ₽/кг включает логистику и растаможку, брокера/пошлины/НДС нет. Комиссия % от товара. Без сертификации и доставки по РФ.'
-    : 'Белая: база = товар (₽) + логистика; пошлина и НДС от базы; брокер и там. сбор — фикс на партию; комиссия % от товара. Без сертификации и доставки по РФ.';
-}
-function calcTotal({price, rate, qty, weight, commPct, logPerKg, dutyPct, vatPct, broker, fee, cargoPerKg, delivery}){
-  const goodsRub  = price * rate * qty;
-  const commission= goodsRub * commPct/100;
-  if(delivery==='cargo'){
-    const cargoCost = weight * qty * cargoPerKg;
-    const cost = goodsRub + commission + cargoCost;
-    return {delivery, goodsRub, commission, logistics:cargoCost, customsBase:0, duty:0, vat:0, broker:0, fee:0, cost};
-  }
-  const logistics = weight * qty * logPerKg;
-  const customsBase = goodsRub + logistics;      // ДОПУЩЕНИЕ: состав базы
-  const duty = customsBase * dutyPct/100;
-  const vat  = (customsBase + duty) * vatPct/100; // ДОПУЩЕНИЕ: НДС от (база+пошлина)
-  const cost = customsBase + duty + vat + (broker||0) + (fee||0) + commission;
-  return {delivery, goodsRub, commission, logistics, customsBase, duty, vat, broker:broker||0, fee:fee||0, cost};
-}
-document.getElementById('calcDate').valueAsDate = new Date();
-document.getElementById('calcAssump').textContent = calcAssumptions('white');
-document.getElementById('dType').addEventListener('change', e=>{
-  const cargo = e.target.value==='cargo';
-  document.querySelectorAll('.white-only').forEach(el=>el.style.display=cargo?'none':'flex');
-  document.querySelectorAll('.cargo-only').forEach(el=>el.style.display=cargo?'flex':'none');
-  document.getElementById('calcAssump').textContent = calcAssumptions(e.target.value);
-  document.getElementById('selDelivery').textContent = cargo?'карго':'белая';
-});
-
-async function fillCalcProducts(){
-  const sel = document.getElementById('calcProduct');
-  try{
-    const j = await api('list','products',{});
-    const live = j.rows.filter(p=>p.factory!=='__deleted__' && p.article!=='__deleted__' && (p.name||p.factory));
-    sel.innerHTML = '<option value="">— вручную —</option>' + live.map(p=>
-      `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.factory)} · ${esc(p.article)}</option>`).join('');
-    fillCalcProducts._rows = live;
-  }catch(e){ msg('Каталог: '+e.message, false); }
-}
-window.toCalc = function(id){
-  document.querySelector('nav button[data-tab="calc"]').click();
-  fillCalcProducts().then(()=>{
-    document.getElementById('calcProduct').value = id;
-    document.getElementById('calcProduct').dispatchEvent(new Event('change'));
-  });
-};
-document.getElementById('calcProduct').addEventListener('change', async e=>{
-  const p = (fillCalcProducts._rows||[]).find(r=>String(r.id)===e.target.value);
-  if(!p) return;
-  document.getElementById('cPrice').value = p.price||'';
-  document.getElementById('cCur').value = p.currency||'CNY';
-  document.getElementById('cWeight').value = p.weight||'';
-  document.getElementById('cDuty').value = p.duty||'';
-  if(p.vat) document.getElementById('cVat').value = p.vat;
-  await fillRate();
-});
-document.getElementById('calcDate').addEventListener('change', fillRate);
-document.getElementById('cCur').addEventListener('change', fillRate);
-async function fillRate(){
-  const cur = document.getElementById('cCur').value;
-  const d = document.getElementById('calcDate').value || new Date().toISOString().slice(0,10);
-  try{
-    const r = await rateFor(cur, d);
-    document.getElementById('cRate').value = r ? r.rate : '';
-    document.getElementById('cRateDate').value = r ? r.date : 'нет курса — введите вручную';
-  }catch(e){ msg(e.message, false); }
-}
-let lastCalc = null;
-document.getElementById('calcRun').onclick = ()=>{
-  const v = id=>+document.getElementById(id).value||0;
-  const delivery = document.getElementById('dType').value;
-  lastCalc = {
-    delivery, price: v('cPrice'), rate: v('cRate'), qty: v('cQty')||1, weight: v('cWeight'),
-    commPct: v('cComm')||DEFAULT_COMMISSION_PCT, logPerKg: v('cLog'), dutyPct: v('cDuty'),
-    vatPct: v('cVat'), broker: v('cBroker'), fee: v('cFee'), cargoPerKg: v('cCargo')
-  };
-  if(!lastCalc.price || !lastCalc.rate) return msg('Заполните цену и курс', false);
-  const r = calcTotal(lastCalc);
-  lastCalc.result = r;
-  const rows = [['Товар, ₽',r.goodsRub],[`Комиссия ${lastCalc.commPct}%, ₽`,r.commission]];
-  if(delivery==='cargo') rows.push(['Карго (логистика+растаможка), ₽', r.logistics]);
-  else rows.push(['Логистика, ₽',r.logistics],['Таможенная база, ₽',r.customsBase],
-    ['Пошлина, ₽',r.duty],['НДС, ₽',r.vat],['Брокер, ₽',r.broker],['Таможенный сбор, ₽',r.fee]);
-  rows.push(['Себестоимость партии, ₽', r.cost]);
-  document.getElementById('calcOut').innerHTML = rows.map(([k,x],i)=>
-    `<tr${i===rows.length-1?' style="font-weight:700"':''}><td>${k}</td><td class="num">${fmt(x)}</td></tr>`).join('');
-  const sel = document.getElementById('calcProduct');
-  const p = sel.value ? (fillCalcProducts._rows||[]).find(x=>String(x.id)===sel.value) : null;
-  lastCalc.productId = p ? p.id : '';
-  lastCalc.name = p ? `${p.factory} · ${p.article} · ${p.name}` : 'Позиция (ручной ввод)';
-  lastCalc.rateDate = document.getElementById('cRateDate').value;
-  lastCalc.calcDate = document.getElementById('calcDate').value;
-  lastCalc.tnved = p ? (p.tnved||'') : '';
-  lastCalc.link = p ? (p.link||'') : '';
-  document.getElementById('calcAdd').disabled = false;
-};
-
-/* ================== ПОДБОР ================== */
-const selection = [];
-document.getElementById('calcAdd').onclick = ()=>{
-  if(!lastCalc) return;
-  const markupPct = +document.getElementById('cMarkup').value||0;
-  const saleTotal = lastCalc.result.cost * (1 + markupPct/100);
-  selection.push({
-    product_id: lastCalc.productId, name: lastCalc.name, qty: lastCalc.qty,
-    cost: lastCalc.result.cost, salePrice: saleTotal/lastCalc.qty, total: saleTotal,
-    rate: lastCalc.rate, rateDate: lastCalc.rateDate, calcDate: lastCalc.calcDate,
-    delivery: lastCalc.delivery, commPct: lastCalc.commPct,
-    // разбивка для бланка КП (юнит-экономика)
-    goodsRub: lastCalc.result.goodsRub, commRub: lastCalc.result.commission,
-    logistics: lastCalc.result.logistics, dutyRub: lastCalc.result.duty,
-    vatRub: lastCalc.result.vat,
-    tnved: lastCalc.tnved||'', dutyPct: lastCalc.dutyPct, vatPct: lastCalc.vatPct,
-    link: lastCalc.link||''
-  });
-  renderSelection(); msg('Позиция добавлена в подбор');
-};
-function renderSelection(){
-  document.getElementById('selItems').innerHTML = selection.map((it,i)=>`
-    <tr><td>${esc(it.name)}</td><td class="num">${esc(it.qty)}</td>
-    <td class="num">${fmt(it.salePrice)}</td><td class="num">${esc(it.rate)}</td>
-    <td>${esc(it.rateDate)}</td><td>${esc(it.calcDate)}</td>
-    <td class="num">${fmt(it.total)}</td>
-    <td><button class="del" onclick="selection.splice(${i},1);renderSelection()">✕</button></td></tr>`).join('')
-    || '<tr><td colspan="8" class="note">Подбор пуст — добавьте позиции из калькулятора</td></tr>';
-  document.getElementById('selTotal').textContent = fmt(selection.reduce((s,x)=>s+x.total,0));
-}
-document.getElementById('selClear').onclick = ()=>{ selection.length=0; renderSelection(); };
-document.getElementById('selSave').onclick = async ()=>{
-  if(!selection.length) return msg('Подбор пуст', false);
-  if(!CTX.deal) return msg('Нет deal_id — подбор не привяжется к клиенту', false);
-  try{
-    const j = await api('add_selection','selections',{
-      selection:{deal_id:CTX.deal, client_name:CTX.name, created_at:new Date().toISOString(),
-        calc_date:new Date().toISOString().slice(0,10), delivery:document.getElementById('dType').value,
-        items_json:JSON.stringify(selection), total_rub:selection.reduce((s,x)=>s+x.total,0)},
-      items: selection.map(it=>({product_id:it.product_id, name:it.name, qty:it.qty,
-        price_rub:it.salePrice, calc_date:it.calcDate}))
-    });
-    msg('Подбор сохранён (id '+j.id+')'); loadHistory();
-  }catch(e){ msg(e.message, false); }
-};
-async function loadHistory(){
-  try{
-    // грузим всю историю (сделка + архив); фильтрация — полем histFilter
-    const j = await api('list','selections',{});
-    const live = j.rows.filter(s=>s.client_name && s.client_name!=='__deleted__');
-    live.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
-    loadHistory._all = live;
-    renderHistory();
-  }catch(e){ msg('История: '+e.message, false); }
-}
-function renderHistory(){
-  const q = (document.getElementById('histFilter').value||'').trim().toLowerCase();
-  const rows = (loadHistory._all||[]).filter(s=>{
-    if(!q) return true;
-    return String(s.client_name||'').toLowerCase().includes(q);
-  });
-  document.getElementById('selHistory').innerHTML = rows.map(s=>{
-    let n=0; try{ n = JSON.parse(s.items_json).length; }catch(e){}
-    const src = s.source==='archive-import' ? ' <span class="pill">архив</span>' : '';
-    return `<tr><td>${esc((s.created_at||'').slice(0,16).replace('T',' '))}</td><td>${esc(s.client_name)}${src}</td>
-      <td>${s.delivery==='cargo'?'карго':(s.delivery?'белая':'—')}</td><td class="num">${n}</td><td class="num">${fmt(s.total_rub)}</td>
-      <td><button class="ghost" onclick="selView('${esc(s.id)}')">смотреть</button>
-          <button class="ghost" onclick="kpFromHistory('${esc(s.id)}')">→ КП</button></td></tr>`;
-  }).join('') || '<tr><td colspan="6" class="note">Ничего не найдено</td></tr>';
-  loadHistory._rows = rows;
-}
-document.getElementById('histFilter').addEventListener('input', renderHistory);
-document.getElementById('histAll').onclick = ()=>{ document.getElementById('histFilter').value=''; renderHistory(); };
-// просмотр содержимого подбора (текст архива / позиции)
-window.selView = id=>{
-  const s = (loadHistory._all||[]).find(r=>String(r.id)===id);
-  if(!s) return;
-  let items=[]; try{ items = JSON.parse(s.items_json); }catch(e){}
-  const txt = items.map(it=>it.note ? it.note : `• ${it.name||''} — ${it.qty||''} шт × ${fmt(it.salePrice||0)} ₽`).join('\n\n');
-  const w = window.open('', '_blank');
-  if(w){
-    w.document.write(`<meta charset="utf-8"><title>Подбор: ${esc(s.client_name)}</title>
-      <body style="font:14px/1.5 sans-serif;max-width:800px;margin:20px auto;padding:0 16px">
-      <h2>${esc(s.client_name)} — подбор от ${esc((s.created_at||'').slice(0,10))}</h2>
-      <pre style="white-space:pre-wrap;font:13px/1.6 sans-serif">${esc(txt)}</pre></body>`);
-    w.document.close();
-  }
-};
-// при открытии из карточки сделки: сразу подставляем имя клиента в фильтр
-if(CTX.name){ document.getElementById('histFilter').value = CTX.name; }
-const __origApplyCtx = applyWidgetContext;
-applyWidgetContext = function(c){ const ok = __origApplyCtx(c); if(ok) renderHistory(); return ok; };
 
 /* ================== КП ================== */
-// Бланк по образцу КП_32426321-2: шапка «под ключ» (разбивка Товар/Логистика+Таможня),
-// блок «Из чего складывается», детализация юнит-экономики, примечания.
-// Числа — из нашего калькулятора: Товар = закупка+комиссия; Логистика+Таможня = логистика+пошлина+НДС(+брокер).
 function fmt2(n){ return (Math.round((+n||0)*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function kpNumber(dealId){ const d=new Date(); return (dealId||'—') + '-' + String(d.getDate()).padStart(2,'0') + String(d.getMonth()+1).padStart(2,'0'); }
 
@@ -753,7 +1084,6 @@ function kpHtml(items, total, client, delivery, broker){
   const today = new Date();
   const validTo = new Date(Date.now()+5*864e5);
   const num = kpNumber(CTX.deal);
-  // агрегаты шапки
   let goods=0, logi=0, duty=0, vat=0, comm=0;
   items.forEach(it=>{
     goods += (it.goodsRub ?? it.goods ?? 0);
@@ -762,24 +1092,27 @@ function kpHtml(items, total, client, delivery, broker){
     vat   += (it.vatRub ?? it.vat ?? 0);
     comm  += (it.commRub ?? 0);
   });
-  const tovar = goods + comm;                    // оплата за товар + комиссии
-  const logtam = logi + duty + vat;              // логистика + таможня
+  const tovar = goods + comm;
+  const logtam = logi + duty + vat;
   const grand = tovar + logtam || total || 0;
   const pctT = grand ? (tovar/grand*100).toFixed(1) : '0.0';
   const pctL = grand ? (logtam/grand*100).toFixed(1) : '0.0';
   const brokerLine = broker ? `<div class="r"><span>Услуги таможенного брокера</span><b>${fmt2(BROKER_FEE)} ₽</b></div>` : '';
 
-  const rows = items.map((it,i)=>`
-    <tr>
+  const rows = items.map((it,i)=>{
+    const photoCell = it.photo ? `<img src="${esc(it.photo)}" style="width:46px;height:46px;object-fit:cover;border-radius:4px"><br>` : '';
+    const linkLine = it.link ? `<br><span class="mut">${esc(it.link)}</span>` : '';
+    return `<tr>
       <td>${i+1}</td>
-      <td class="l">${esc(it.name||'')}${it.link?` <span class="mut">${esc(it.link)}</span>`:''}<br>
+      <td class="l">${photoCell}${esc(it.name||'')}${linkLine}<br>
         <span class="mut">${esc(it.tnved||'')} · пошл. ${it.dutyPct ?? '—'}% · НДС ${it.vatPct ?? '—'}% · ${it.qty} шт</span></td>
       <td>${fmt2((it.goodsRub??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.goodsRub??0)}</span></td>
       <td>${fmt2((it.logistics??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.logistics??0)}</span></td>
       <td>${fmt2(((it.dutyRub??0)+(it.vatRub??0))/(it.qty||1))}<br><span class="mut">${fmt2((it.dutyRub??0)+(it.vatRub??0))}</span></td>
       <td>${fmt2((it.commRub??0)/(it.qty||1))}<br><span class="mut">${fmt2(it.commRub??0)}</span></td>
       <td><b>${fmt2(it.salePrice ?? ((it.total||0)/(it.qty||1)))}</b><br><span class="mut">${fmt2(it.total??0)}</span></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>КП ${num}</title>
 <style>
@@ -884,14 +1217,14 @@ function kpHtml(items, total, client, delivery, broker){
 </div></body></html>`;
 }
 
-const BROKER_FEE = 17000; // услуги таможенного брокера, константа из калькуляции-шаблона (строка «Таможенная декларация»)
+const BROKER_FEE = 17000;
 
 let currentKpHtml = '', currentKp = '', currentSummary = '';
 function buildKp(items, total, client, delivery){
   const broker = document.getElementById('kpBroker').checked;
   currentKpHtml = kpHtml(items, total, client, delivery, broker);
   document.getElementById('kpOut').innerHTML = currentKpHtml;
-  currentKp = kpText(items, total, client, delivery); // текстовая версия для CRM/буфера
+  currentKp = kpText(items, total, client, delivery);
   currentSummary = `КП ${kpNumber(CTX.deal)}: ${items.length} поз., итог ${fmt(total)} ₽ (${delivery==='cargo'?'карго':'белая'}${broker?', брокер':''}, ${new Date().toLocaleDateString('ru-RU')})`;
   document.querySelector('nav button[data-tab="kp"]').click();
 }
@@ -903,7 +1236,7 @@ function kpText(items, total, client, delivery){
          'Тип доставки: ' + (delivery==='cargo' ? 'Карго (логистика и растаможка включены в ставку)' : 'Белая (таможенные платежи + брокер)'), '');
   L.push('ДЕТАЛИЗАЦИЯ · юнит-экономика');
   items.forEach((it,i)=>{
-    L.push(`${i+1}. ${it.name}`,
+    L.push(`${i+1}. ${it.name}` + (it.link ? ` (${it.link})` : ''),
       `   ${it.qty} шт × ${fmt(it.salePrice)} ₽ = ${fmt(it.total)} ₽`,
       `   курс ${it.rate||'—'}${it.rateDate?' от '+it.rateDate:''} · дата расчёта ${it.calcDate||'—'} · ${it.delivery==='cargo'?'карго':'белая'} · комиссия ${it.commPct ?? DEFAULT_COMMISSION_PCT}%`);
   });
@@ -940,13 +1273,10 @@ document.getElementById('kpDownload').onclick = ()=>{
   w.focus();
   setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
 };
-// Возврат результата в CRM: виджет слушает 'china-goods:result' и пишет в поле сделки
-// (changeDealValue, RESULT_FIELD_ID в china-widget.html). Отправляем и краткий итог,
-// и полный текст КП (fileBase64 без префикса data:) — что примет поле, зависит от его типа.
 document.getElementById('kpToCrm').onclick = ()=>{
   if(!currentSummary) return msg('Сначала сформируйте КП', false);
   try{
-    const b64 = btoa(unescape(encodeURIComponent(currentKp))); // UTF-8 → base64
+    const b64 = btoa(unescape(encodeURIComponent(currentKp)));
     window.parent.postMessage({type:'china-goods:result', deal_id:CTX.deal,
       summary: currentSummary, fileName: 'КП_' + (CTX.name||'client') + '.txt', fileBase64: b64}, '*');
     msg('Итог отправлен в виджет CRM: ' + currentSummary);
@@ -954,7 +1284,8 @@ document.getElementById('kpToCrm').onclick = ()=>{
 };
 
 /* старт */
-fillSpecProducts(); loadRates();
+restoreDraft();
+fillSpecProducts(); loadRates(); loadHistory();
 </script>
 </body>
 </html>
